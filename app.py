@@ -1,10 +1,5 @@
+
 import streamlit as st
-from agent_managerr import agent_manager  # This is the only import we need
-
-
-
-
-
 # Set page configuration
 st.set_page_config(
     page_title="AI Personal Assistant",
@@ -12,18 +7,12 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# Add custom CSS
+from agent_managerr import agent_manager  
+# Add custom CSS for styling input box
 st.markdown("""
     <style>
     .stTextInput > div > div > input {
         min-height: 100px;
-    }
-    .output-container {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 10px 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -36,7 +25,6 @@ This assistant can help you with:
 - 📋 Listing upcoming calendar events
 - 📧 Sending emails
 """)
-
 
 # Input section
 query = st.text_area(
@@ -52,30 +40,32 @@ if st.button("Process Request", type="primary"):
             try:
                 # Get response from agent manager
                 response = agent_manager(query)
-                
-                # Display response in a container with proper formatting
+
+                # ✅ Ensure response is a string
+                if not isinstance(response, str):
+                    response = "❌ Error: No valid response received."
+
+                # Display response
                 st.markdown("### Response:")
-                st.markdown('<div class="output-container">', unsafe_allow_html=True)
                 
-                # Split response into lines and format them
-                lines = response.split('\n')
-                for line in lines:
-                    # Add emojis and formatting based on content
-                    if "Event Scheduled Successfully" in line:
-                        st.success(line)
-                    elif "Email sent successfully" in line:
-                        st.success(line)
-                    elif "Upcoming" in line:
-                        st.subheader(line)
-                    elif line.startswith("❌"):
-                        st.error(line)
-                    elif line.startswith("-" * 10):  # Separator lines
-                        st.markdown("---")
-                    else:
-                        st.write(line)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
+                # ✅ Use Streamlit container instead of <div>
+                with st.container():
+                    # Split response into lines and format them
+                    lines = response.split('\n')
+                    for line in lines:
+                        if "Event Scheduled Successfully" in line:
+                            st.success(line)
+                        elif "Email sent successfully" in line:
+                            st.success(line)
+                        elif "Upcoming" in line:
+                            st.subheader(line)
+                        elif line.startswith("❌"):
+                            st.error(line)
+                        elif line.startswith("-" * 10):  # Separator lines
+                            st.markdown("---")
+                        else:
+                            st.write(line)
+
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
     else:
@@ -84,8 +74,3 @@ if st.button("Process Request", type="primary"):
 # Footer
 st.markdown("---")
 st.markdown("Made by Milind Warade")
-
-
-
-# cd C:\Users\VICTUS\Desktop\AGENTS
-# python -m streamlit run app.py
