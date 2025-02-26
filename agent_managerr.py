@@ -12,6 +12,19 @@ import re
 import pytz
 from langgraph.graph import Graph, StateGraph
 
+# Debug API Key Loading
+st.write("Checking Streamlit Secrets...")  # This helps verify execution
+api_key = st.secrets.get("GROQ_API_KEY", None)
+
+if not api_key:
+    st.error("🚨 GROQ_API_KEY is missing! Please check Streamlit secrets.")
+else:
+    st.success("✅ GROQ_API_KEY is loaded!")
+
+# Initialize Groq Client
+if api_key:
+    groq_client = Groq(api_key=api_key)
+
 def get_google_credentials():
     """Get Google credentials from Streamlit secrets or local file."""
     if "google_credentials" in st.secrets:
