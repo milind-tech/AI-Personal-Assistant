@@ -3,7 +3,7 @@ import streamlit as st
 import tempfile
 from typing import List, Dict, Any, TypedDict
 from datetime import datetime, timedelta
-from groq import Groq
+from groq import Client
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from email.mime.text import MIMEText
@@ -26,7 +26,10 @@ api_key = os.getenv("API_KEY")  # Load from environment
 
 # Initialize Groq Client
 if api_key:
-    groq_client = Groq(api_key=api_key)
+    # groq_client = Groq(api_key=api_key)
+
+    groq_client = (api_key=api_key)  # Ensure correct import
+
 
 def get_google_credentials():
     """Get Google credentials from Streamlit secrets or local file."""
@@ -42,7 +45,7 @@ def get_google_credentials():
     else:
         return 'token.json'  # Fallback for local development
 # Initialize Groq client
-groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+groq_client = Client(api_key=st.secrets["GROQ_API_KEY"])
 
 # Define state management
 class AgentState(TypedDict):
