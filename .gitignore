@@ -1,0 +1,7 @@
+# .gitignore
+token.json
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+*.json
