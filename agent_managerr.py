@@ -28,7 +28,7 @@ api_key = os.getenv("API_KEY")  # Load from environment
 if api_key:
     # groq_client = Groq(api_key=api_key)
 
-    groq_client = (api_key=api_key)  # Ensure correct import
+    groq_client = Client(api_key=api_key)  # Ensure correct import
 
 
 def get_google_credentials():
