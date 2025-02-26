@@ -11,6 +11,9 @@ import base64
 import re
 import pytz
 from langgraph.graph import Graph, StateGraph
+import os
+api_key = os.getenv("API_KEY")  # Load from environment
+
 
 # # Debug API Key Loading
 # st.write("Checking Streamlit Secrets...")  # This helps verify execution
