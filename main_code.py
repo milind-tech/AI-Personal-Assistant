@@ -33,7 +33,6 @@ def get_groq_client():
         api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
         
         if not api_key:
-            st.warning("GROQ API key not found. Some features may not work.")
             return None
             
         return Client(api_key=api_key)
