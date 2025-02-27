@@ -104,7 +104,7 @@ if 'google_credentials' in st.secrets:
 else:
     st.write("Debug: Google credentials are NOT available")
 
-from agent_managerr import agent_manager  
+from agent_manager import agent_manager  
 # Add custom CSS for styling input box
 st.markdown("""
     <style>
