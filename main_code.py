@@ -1809,6 +1809,268 @@ def list_calendar_events(query: str) -> str:
 
 #5
 
+# def extract_main_content(query):
+#     """Extract the main content/purpose from the query."""
+#     # Remove email addresses
+#     cleaned = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', query)
+    
+#     # Remove email related commands
+#     cleaned = re.sub(r'(?:send|write|compose|email)\s+(?:an|a)?\s*email\s+(?:to|about|regarding|on|with)?', '', cleaned, flags=re.IGNORECASE)
+    
+#     # Remove "requesting" if it exists
+#     cleaned = re.sub(r'requesting\s+', '', cleaned, flags=re.IGNORECASE)
+    
+#     # Extract the main content more carefully
+#     # If "telling the benefits of" pattern exists, preserve it
+#     if re.search(r'telling\s+the\s+benefits\s+of', cleaned, flags=re.IGNORECASE):
+#         main_content = re.search(r'telling\s+the\s+benefits\s+of\s+(.+?)(?:\.|$)', cleaned, flags=re.IGNORECASE)
+#         if main_content:
+#             return f"the benefits of {main_content.group(1)}".strip()
+    
+#     # Remove "to [Name]" patterns
+#     cleaned = re.sub(r'to\s+([A-Z][a-z]+)(?:\s|,|\.)', '', cleaned, flags=re.IGNORECASE)
+    
+#     # Remove email address references
+#     cleaned = re.sub(r'(?:his|her|their)\s+email\s+(?:is|address\s+is)', '', cleaned, flags=re.IGNORECASE)
+    
+#     # Remove asking/telling mentions but preserve what comes after
+#     telling_match = re.search(r'(?:asking|telling)\s+(?:him|her|them)\s+(.+)', cleaned, flags=re.IGNORECASE)
+#     if telling_match:
+#         return telling_match.group(1).strip()
+    
+#     return cleaned.strip()
+
+# def extract_project_name(query):
+#     """Extract project name from query if available."""
+#     match = re.search(r'(?:project|task)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     return match.group(1).strip() if match else None
+
+# def extract_benefit_topic(query):
+#     """Extract topic for benefits discussion."""
+#     match = re.search(r'benefits\s+of\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     return match.group(1).strip() if match else None
+
+# def extract_recipient_name(email):
+#     """Extract recipient name from email address."""
+#     name = email.split('@')[0]
+#     # Convert email format to proper name (e.g., john.doe -> John Doe)
+#     if '.' in name:
+#         parts = name.split('.')
+#         return ' '.join(part.capitalize() for part in parts)
+#     return name.capitalize()
+
+# def generate_subject(query):
+#     """Generate appropriate subject line based on query content."""
+#     # First check for explicit subject mentions
+#     subject_patterns = [
+#         r'(?:subject|about|regarding|re|titled)[:|\s]\s*"?([^"\.]+)"?',
+#         r'(?:email|message|send)\s+(?:with\s+subject|about|regarding)\s+"?([^"\.]+)"?',
+#         r'with\s+(?:subject|title)\s+"?([^"\.]+)"?'
+#     ]
+    
+#     for pattern in subject_patterns:
+#         subject_match = re.search(pattern, query, re.IGNORECASE)
+#         if subject_match:
+#             return subject_match.group(1).strip()
+    
+#     # Check for benefits of something
+#     benefits_match = re.search(r'benefits\s+of\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     if benefits_match:
+#         return f"Benefits of {benefits_match.group(1).capitalize()}"
+    
+#     # Look for project mentions
+#     project_match = re.search(r'(?:project|task)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     if project_match:
+#         project = project_match.group(1).strip()
+#         # Check if this is an update request
+#         if re.search(r'update|progress|status', query, re.IGNORECASE):
+#             return f"Update Request: Project {project}"
+#         return f"Regarding Project {project}"
+    
+#     # Check for "telling" pattern
+#     telling_match = re.search(r'telling\s+(?:him|her|them)\s+(?:about|regarding)?\s*(.+?)(?:\.|$)', query, re.IGNORECASE)
+#     if telling_match:
+#         topic = telling_match.group(1).strip()
+#         return f"Information about {topic}"
+    
+#     # Check for update requests
+#     if re.search(r'update|progress|status', query, re.IGNORECASE):
+#         return "Project Update Request"
+    
+#     # Generic subject that uses the first few words of content
+#     content = extract_main_content(query)
+#     words = content.split()[:3]  # First 3 words
+#     if words:
+#         return " ".join(words).capitalize()
+#     return "Information Request"
+
+# def generate_email_content(recipient_name, subject, query):
+#     """Generate professional email content based on query type and context."""
+#     content = extract_main_content(query)
+    
+#     # Standard professional email template
+#     body = [
+#         f"Hello {recipient_name},",
+#         "",
+#         "I hope this email finds you well."
+#     ]
+    
+#     # Determine email type and generate appropriate content
+#     if "access" in query.lower() and "software" in query.lower():
+#         body.extend([
+#             "",
+#             "I am writing to request access to the new software. I would need this access to perform my duties effectively.",
+#             "",
+#             "Could you please provide me with the necessary credentials or instructions to access the system?"
+#         ])
+#     elif "update" in query.lower() or "status" in query.lower() or "progress" in query.lower():
+#         project = extract_project_name(query) or "the project"
+#         body.extend([
+#             "",
+#             f"I am writing to request an update on {project}.",
+#             "",
+#             "Could you please share with me:",
+#             "- Current progress and status",
+#             "- Any challenges or blockers faced",
+#             "- Expected timeline for completion",
+#             "- Any additional resources needed"
+#         ])
+#     elif "meeting" in query.lower() or "schedule" in query.lower():
+#         body.extend([
+#             "",
+#             "I would like to schedule a meeting to discuss our current projects and priorities.",
+#             "",
+#             "Please let me know your availability for next week so we can find a suitable time.",
+#             "",
+#             "Agenda items for discussion:",
+#             "- Project updates",
+#             "- Timeline review",
+#             "- Resource allocation",
+#             "- Next steps"
+#         ])
+#     elif "document" in query.lower() or "file" in query.lower():
+#         body.extend([
+#             "",
+#             "I am writing to request the documents related to our recent project.",
+#             "",
+#             "Could you please share these files with me at your earliest convenience?",
+#             "",
+#             "This will help ensure we maintain proper documentation and can proceed efficiently."
+#         ])
+#     elif "benefits" in query.lower():
+#         topic = extract_benefit_topic(query) or "the program"
+#         body.extend([
+#             "",
+#             f"I wanted to share with you some key benefits of {topic}:",
+#             "",
+#             "- Improved efficiency and productivity",
+#             "- Cost savings and resource optimization",
+#             "- Enhanced collaboration and communication",
+#             "- Better outcomes and quality results",
+#             "- Long-term sustainability and scalability",
+#             "",
+#             f"I believe implementing {topic} would be valuable for our team and organization."
+#         ])
+#     else:
+#         body.extend([
+#             "",
+#             f"{content}",
+#             "",
+#             "I look forward to your insights on this matter."
+#         ])
+    
+#     body.extend([
+#         "",
+#         "I would appreciate your response at your earliest convenience. If you need any additional information or have questions, please don't hesitate to ask.",
+#         "",
+#         "Best regards,",
+#         "Milind Warade"
+#     ])
+    
+#     return "\n".join(body)
+
+# def send_email(query: str) -> str:
+#     """Send an email based on the user query with improved content generation."""
+#     print(f"Debug: send_email called with query: {query}")
+#     try:
+#         # Extract email address
+#         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+#         email_matches = re.findall(email_pattern, query)
+        
+#         if not email_matches:
+#             return "❌ No email address found in the query! Please include a valid email address."
+            
+#         recipient = email_matches[0]
+#         print(f"Debug: Recipient email extracted: {recipient}")
+        
+#         # Get Google credentials and initialize Gmail API
+#         credentials = None
+#         token_path = os.path.join(os.path.expanduser('~'), '.config', 'google', 'token.json')
+#         credentials_path = os.path.join(os.path.expanduser('~'), '.config', 'google', 'credentials.json')
+        
+#         SCOPES = ['https://www.googleapis.com/auth/gmail.send',
+#                   'https://www.googleapis.com/auth/gmail.compose']
+        
+#         try:
+#             if os.path.exists(token_path):
+#                 credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
+            
+#             # If credentials don't exist or are invalid, run the OAuth flow
+#             if not credentials or not credentials.valid:
+#                 if credentials and credentials.expired and credentials.refresh_token:
+#                     credentials.refresh(Request())
+#                 else:
+#                     if not os.path.exists(credentials_path):
+#                         return "❌ Google credentials file not found. Please set up OAuth 2.0 credentials."
+                    
+#                     flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
+#                     credentials = flow.run_local_server(port=0)
+                
+#                 # Save the credentials for future use
+#                 os.makedirs(os.path.dirname(token_path), exist_ok=True)
+#                 with open(token_path, 'w') as token:
+#                     token.write(credentials.to_json())
+            
+#             # Build Gmail service
+#             gmail = build('gmail', 'v1', credentials=credentials)
+            
+#             # Extract recipient name and generate subject/content
+#             recipient_name = extract_recipient_name(recipient)
+#             subject = generate_subject(query)
+#             body = generate_email_content(recipient_name, subject, query)
+            
+#             # Get sender email
+#             sender = gmail.users().getProfile(userId='me').execute()['emailAddress']
+            
+#             # Create and send message
+#             message = MIMEText(body)
+#             message['to'] = recipient
+#             message['from'] = sender
+#             message['subject'] = subject
+            
+#             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+#             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            
+#             return f"""✅ Email sent successfully!
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+            
+#         except Exception as e:
+#             error_trace = traceback.format_exc()
+#             print(f"Debug: Error in Gmail API operations: {str(e)}")
+#             print(f"Debug: Traceback: {error_trace}")
+#             return f"❌ Email sending failed: {str(e)}"
+            
+#     except Exception as e:
+#         error_trace = traceback.format_exc()
+#         print(f"Debug: Error in send_email: {str(e)}")
+#         print(f"Debug: Traceback: {error_trace}")
+#         return f"❌ Failed to process email request: {str(e)}"
+
+#6
+
 def extract_main_content(query):
     """Extract the main content/purpose from the query."""
     # Remove email addresses
@@ -1993,6 +2255,14 @@ def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation."""
     print(f"Debug: send_email called with query: {query}")
     try:
+        # Get credentials path directly
+        credentials_path = get_google_credentials()
+        print(f"Debug: Using credentials from: {credentials_path}")
+        
+        if not credentials_path:
+            print("Debug: No valid credentials found")
+            return "❌ Google credentials not available. Unable to send email."
+            
         # Extract email address
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         email_matches = re.findall(email_pattern, query)
@@ -2003,44 +2273,28 @@ def send_email(query: str) -> str:
         recipient = email_matches[0]
         print(f"Debug: Recipient email extracted: {recipient}")
         
-        # Get Google credentials and initialize Gmail API
-        credentials = None
-        token_path = os.path.join(os.path.expanduser('~'), '.config', 'google', 'token.json')
-        credentials_path = os.path.join(os.path.expanduser('~'), '.config', 'google', 'credentials.json')
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from email.mime.text import MIMEText
+        import base64
         
-        SCOPES = ['https://www.googleapis.com/auth/gmail.send',
-                  'https://www.googleapis.com/auth/gmail.compose']
+        # Initialize Gmail service directly with credentials
+        creds = Credentials.from_authorized_user_file(credentials_path, 
+            ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
+        gmail = build('gmail', 'v1', credentials=creds)
+        print("Debug: Gmail service built successfully")
+        
+        # Extract recipient name and generate subject/content
+        recipient_name = extract_recipient_name(recipient)
+        subject = generate_subject(query)
+        body = generate_email_content(recipient_name, subject, query)
         
         try:
-            if os.path.exists(token_path):
-                credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
-            
-            # If credentials don't exist or are invalid, run the OAuth flow
-            if not credentials or not credentials.valid:
-                if credentials and credentials.expired and credentials.refresh_token:
-                    credentials.refresh(Request())
-                else:
-                    if not os.path.exists(credentials_path):
-                        return "❌ Google credentials file not found. Please set up OAuth 2.0 credentials."
-                    
-                    flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-                    credentials = flow.run_local_server(port=0)
-                
-                # Save the credentials for future use
-                os.makedirs(os.path.dirname(token_path), exist_ok=True)
-                with open(token_path, 'w') as token:
-                    token.write(credentials.to_json())
-            
-            # Build Gmail service
-            gmail = build('gmail', 'v1', credentials=credentials)
-            
-            # Extract recipient name and generate subject/content
-            recipient_name = extract_recipient_name(recipient)
-            subject = generate_subject(query)
-            body = generate_email_content(recipient_name, subject, query)
-            
             # Get sender email
-            sender = gmail.users().getProfile(userId='me').execute()['emailAddress']
+            profile_response = gmail.users().getProfile(userId='me').execute()
+            sender = profile_response['emailAddress']
+            print(f"Debug: Sender email retrieved: {sender}")
             
             # Create and send message
             message = MIMEText(body)
@@ -2050,6 +2304,7 @@ def send_email(query: str) -> str:
             
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
             
             return f"""✅ Email sent successfully!
 To: {recipient}
@@ -2059,7 +2314,7 @@ Message:
             
         except Exception as e:
             error_trace = traceback.format_exc()
-            print(f"Debug: Error in Gmail API operations: {str(e)}")
+            print(f"Debug: Error sending email: {str(e)}")
             print(f"Debug: Traceback: {error_trace}")
             return f"❌ Email sending failed: {str(e)}"
             
@@ -2068,7 +2323,6 @@ Message:
         print(f"Debug: Error in send_email: {str(e)}")
         print(f"Debug: Traceback: {error_trace}")
         return f"❌ Failed to process email request: {str(e)}"
-
 
 
 
