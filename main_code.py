@@ -3,14 +3,9 @@ import json
 import tempfile
 from typing import List, Dict, Any, TypedDict
 from datetime import datetime, timedelta
-from groq import Client
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from email.mime.text import MIMEText
-import base64
 import re
 import pytz
-from langgraph.graph import Graph, StateGraph
+from langgraph.graph import StateGraph
 import os
 import traceback
 
@@ -28,49 +23,85 @@ class AgentState(TypedDict):
     current_agent: str
     final_response: str
 
-# Initialize Groq client inside a function instead of at module level
+# Move API keys and credentials to environment variables or proper secrets management
 def get_groq_client():
     try:
-        api_key = st.secrets["GROQ_API_KEY"]
+        # Import client only when needed
+        from groq import Client
+        
+        # Better error handling with fallback options
+        api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+        
+        if not api_key:
+            st.warning("GROQ API key not found. Some features may not work.")
+            return None
+            
         return Client(api_key=api_key)
+    except ImportError:
+        st.error("Groq client library not installed. Install it with: pip install groq")
+        return None
     except Exception as e:
-        st.error(f"Error initializing Groq client: {e}")
+        st.error(f"Error initializing Groq client: {str(e)}")
         return None
 
 def get_google_credentials():
-    """Get Google credentials from Streamlit secrets or local file."""
-    if "google_credentials" in st.secrets:
-        # Create credentials from secrets
-        creds_info = {k: v for k, v in st.secrets["google_credentials"].items()}
-        
-        # Save to temporary file for functions expecting a file path
-        temp = tempfile.NamedTemporaryFile(delete=False, suffix='.json')
-        temp.write(json.dumps(creds_info).encode())
-        temp.close()
-        return temp.name
-    else:
-        return 'token.json'  # Fallback for local development
+    """Get Google credentials from Streamlit secrets or local file with better error handling."""
+    try:
+        if "google_credentials" in st.secrets:
+            # Create credentials from secrets
+            creds_info = {k: v for k, v in st.secrets["google_credentials"].items()}
+            
+            # Save to temporary file for functions expecting a file path
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix='.json')
+            temp.write(json.dumps(creds_info).encode())
+            temp.close()
+            return temp.name
+        elif os.path.exists('token.json'):
+            return 'token.json'  # Fallback for local development
+        else:
+            st.warning("Google credentials not found. Calendar and email features will not work.")
+            return None
+    except Exception as e:
+        st.error(f"Error setting up Google credentials: {str(e)}")
+        return None
 
 def safe_json_parse(text, default=None):
-    """Safely parse JSON with fallback."""
+    """Safely parse JSON with fallback and improved handling."""
+    if not text:
+        return default if default is not None else {"agents": ["calendar_list"]}
+        
     try:
         return json.loads(text)
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         # Try to fix common JSON formatting issues
-        if '"agents":' in text:
+        try:
             # Extract just the agents array if possible
-            try:
+            if '"agents":' in text:
                 match = re.search(r'"agents":\s*(\[[^\]]+\])', text)
                 if match:
                     agents_json = match.group(1)
                     return {"agents": json.loads(agents_json)}
-            except Exception:
-                pass
+            
+            # Try to extract any JSON array
+            match = re.search(r'\[(.*?)\]', text)
+            if match:
+                agents_json = match.group(0)
+                return {"agents": json.loads(agents_json)}
+        except Exception:
+            pass
+            
         return default if default is not None else {"agents": ["calendar_list"]}
 
 def create_calendar_event(query: str) -> str:
+    """Create a calendar event based on the user query."""
     try:
         credentials_path = get_google_credentials()
+        if not credentials_path:
+            return "❌ Google credentials not available. Unable to create calendar event."
+        
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
         
         calendar = build('calendar', 'v3', 
             credentials=Credentials.from_authorized_user_file(credentials_path, 
@@ -98,10 +129,14 @@ def create_calendar_event(query: str) -> str:
 
         groq_client = get_groq_client()
         if not groq_client:
-            return "❌ Error initializing Groq client. Please check your API key."
+            # Fallback parser without LLM for basic event creation
+            return simple_event_parser(query, timezone)
             
+        # Configurable model with fallback options
+        model = "gemma2-9b-it"  # Could be configurable
+        
         response = groq_client.chat.completions.create(
-            model="gemma2-9b-it",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )
@@ -112,7 +147,8 @@ def create_calendar_event(query: str) -> str:
         try:
             event_details = json.loads(response_content)
         except json.JSONDecodeError as e:
-            return f"❌ Failed to parse event details: {e}"
+            # Fallback to simple parser if JSON parsing fails
+            return simple_event_parser(query, timezone)
         
         # Parse start time
         start_datetime_str = f"{event_details['date']}T{event_details['start_time']}:00"
@@ -222,40 +258,200 @@ def create_calendar_event(query: str) -> str:
     except Exception as e:
         return f"❌ Failed to create calendar event: {str(e)}"
 
+def simple_event_parser(query, timezone):
+    """Simple regex-based event parser as fallback when LLM is unavailable"""
+    try:
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
+        credentials_path = get_google_credentials()
+        if not credentials_path:
+            return "❌ Google credentials not available. Unable to create calendar event."
+            
+        calendar = build('calendar', 'v3', 
+            credentials=Credentials.from_authorized_user_file(credentials_path, 
+                ['https://www.googleapis.com/auth/calendar.events']))
+        
+        # Extract event title (anything before temporal words)
+        title_match = re.match(r'^(.*?)(?:on|tomorrow|next|this|at|from)', query, re.IGNORECASE)
+        if title_match:
+            title = title_match.group(1).strip()
+        else:
+            title = "New Event"  # Default title
+            
+        # Set date (default to today)
+        now = datetime.now(pytz.timezone(timezone))
+        event_date = now.date()
+        
+        # Check for tomorrow
+        if "tomorrow" in query.lower():
+            event_date = (now + timedelta(days=1)).date()
+            
+        # Check for specific date
+        date_match = re.search(r'on\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)', query, re.IGNORECASE)
+        if date_match:
+            try:
+                day = int(date_match.group(1))
+                month_str = date_match.group(2)
+                month_dict = {
+                    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+                    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+                    'aug': 8, 'august': 8, 'sep': 9, 'september': 9, 'oct': 10, 'october': 10,
+                    'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+                }
+                month = month_dict.get(month_str.lower(), now.month)
+                year = now.year
+                
+                # Handle next year if month is in the past
+                if month < now.month:
+                    year += 1
+                    
+                event_date = datetime(year, month, day).date()
+            except (ValueError, KeyError):
+                pass
+                
+        # Extract time
+        start_hour, start_minute = 9, 0  # Default to 9 AM
+        end_hour, end_minute = 10, 0     # Default to 10 AM
+        
+        # Check for time specification
+        time_match = re.search(r'at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)', query, re.IGNORECASE)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2)) if time_match.group(2) else 0
+            meridiem = time_match.group(3).lower()
+            
+            if meridiem == 'pm' and hour < 12:
+                hour += 12
+                
+            start_hour, start_minute = hour, minute
+            end_hour, end_minute = hour + 1, minute
+            
+        # Check for time range
+        time_range_match = re.search(r'from\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s+to\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)', query, re.IGNORECASE)
+        if time_range_match:
+            start_hour = int(time_range_match.group(1))
+            start_minute = int(time_range_match.group(2)) if time_range_match.group(2) else 0
+            start_meridiem = time_range_match.group(3).lower()
+            
+            end_hour = int(time_range_match.group(4))
+            end_minute = int(time_range_match.group(5)) if time_range_match.group(5) else 0
+            end_meridiem = time_range_match.group(6).lower()
+            
+            if start_meridiem == 'pm' and start_hour < 12:
+                start_hour += 12
+            if end_meridiem == 'pm' and end_hour < 12:
+                end_hour += 12
+                
+        # Extract location
+        location = ""
+        location_match = re.search(r'at\s+([\w\s]+)(?:$|\.)', query, re.IGNORECASE)
+        if location_match and "at" not in location_match.group(1).lower():
+            location = location_match.group(1).strip()
+            
+        # Create datetime objects
+        tz = pytz.timezone(timezone)
+        start_datetime = tz.localize(datetime.combine(event_date, datetime.min.time().replace(hour=start_hour, minute=start_minute)))
+        end_datetime = tz.localize(datetime.combine(event_date, datetime.min.time().replace(hour=end_hour, minute=end_minute)))
+        
+        # Create event dictionary
+        event = {
+            'summary': title,
+            'start': {
+                'dateTime': start_datetime.isoformat(),
+                'timeZone': timezone
+            },
+            'end': {
+                'dateTime': end_datetime.isoformat(),
+                'timeZone': timezone
+            }
+        }
+        
+        if location:
+            event['location'] = location
+            
+        # Insert event into calendar
+        result = calendar.events().insert(calendarId='primary', body=event).execute()
+        
+        # Prepare response
+        response_parts = [
+            f"✅ Event Scheduled Successfully!",
+            f"Event: {title}",
+            f"Date: {start_datetime.strftime('%A, %B %d, %Y')}",
+            f"Time: {start_datetime.strftime('%I:%M %p')} to {end_datetime.strftime('%I:%M %p')}"
+        ]
+        
+        if location:
+            response_parts.append(f"Location: {location}")
+            
+        response_parts.append(f"View in Calendar: {result.get('htmlLink')}")
+        
+        return "\n".join(response_parts)
+    except Exception as e:
+        return f"❌ Failed to create calendar event with fallback parser: {str(e)}"
+
 def list_calendar_events(query: str) -> str:
+    """List upcoming calendar events."""
     try:
         credentials_path = get_google_credentials()
+        if not credentials_path:
+            return "❌ Google credentials not available. Unable to list calendar events."
+        
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
         
         calendar = build('calendar', 'v3', 
             credentials=Credentials.from_authorized_user_file(credentials_path, 
                 ['https://www.googleapis.com/auth/calendar.readonly']))
         
-        prompt = f"""From '{query}' extract number of events to show. Default is 10. Return just the number."""
-        
-        groq_client = get_groq_client()
-        if not groq_client:
-            return "❌ Error initializing Groq client. Please check your API key."
-            
-        response = groq_client.chat.completions.create(
-            model="gemma2-9b-it",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        response_content = response.choices[0].message.content.strip()
-        
-        try:
-            num_events = int(response_content)
-        except:
-            num_events = 10
-            
-        # Handle special case for small numbers from the query
+        # Extract number of events directly from query with regex
+        num_events = 10  # Default
+        num_match = re.search(r'(\d+)\s+(?:upcoming\s+)?events', query.lower())
+        if num_match:
+            try:
+                num_events = int(num_match.group(1))
+            except ValueError:
+                pass
+                
+        # Handle special cases
         if "my 2 upcoming events" in query.lower() or "list my 2 upcoming events" in query.lower():
             num_events = 2
+            
+        # If LLM is available, use it for more complex parsing
+        if "next few" in query.lower() or "upcoming" in query.lower() and not num_match:
+            groq_client = get_groq_client()
+            if groq_client:
+                prompt = f"""From '{query}' extract number of events to show. Default is 10. Return just the number."""
+                
+                response = groq_client.chat.completions.create(
+                    model="gemma2-9b-it",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                response_content = response.choices[0].message.content.strip()
+                
+                try:
+                    extracted_num = int(response_content)
+                    if 1 <= extracted_num <= 50:  # Reasonable range check
+                        num_events = extracted_num
+                except ValueError:
+                    pass
         
+        # Get date range - default to 30 days
+        days_ahead = 30
+        if "this week" in query.lower():
+            days_ahead = 7
+        elif "this month" in query.lower():
+            days_ahead = 30
+        elif "today" in query.lower():
+            days_ahead = 1
+            
         events_result = calendar.events().list(
             calendarId='primary',
             timeMin=datetime.utcnow().isoformat() + 'Z',
-            timeMax=(datetime.utcnow() + timedelta(days=30)).isoformat() + 'Z',
+            timeMax=(datetime.utcnow() + timedelta(days=days_ahead)).isoformat() + 'Z',
             maxResults=num_events,
             singleEvents=True,
             orderBy='startTime'
@@ -286,10 +482,18 @@ def list_calendar_events(query: str) -> str:
     except Exception as e:
         return f"❌ Failed to list calendar events: {str(e)}"
 
-# Gmail Agent Tool
 def send_email(query: str) -> str:
+    """Send an email based on the user query."""
     try:
         credentials_path = get_google_credentials()
+        if not credentials_path:
+            return "❌ Google credentials not available. Unable to send email."
+        
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from email.mime.text import MIMEText
+        import base64
         
         # Initialize Gmail service
         creds = Credentials.from_authorized_user_file(credentials_path, 
@@ -299,38 +503,47 @@ def send_email(query: str) -> str:
         # Extract email address
         email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', query)
         if not email_match:
-            return "❌ No email address found in the query!"
+            return "❌ No email address found in the query! Please include a valid email address."
             
         recipient = email_match.group()
         
-        # Generate email content
-        prompt = f"""
-        Based on this request: "{query}"
-        Generate a professional email with:
-        1. Subject line
-        2. Professional greeting
-        3. Main message
-        4. Professional closing
-        5. Signature: Best regards,\nMilind Warade
-
-        Format:
-        SUBJECT: [subject line]
-        [email body with signature]
-        """
-        
-        groq_client = get_groq_client()
-        if not groq_client:
-            return "❌ Error initializing Groq client. Please check your API key."
+        # Extract subject if present (anything after "subject:" or "about")
+        subject = "No Subject"
+        subject_match = re.search(r'(?:subject:|about:?)\s+([^\n.]+)', query, re.IGNORECASE)
+        if subject_match:
+            subject = subject_match.group(1).strip()
             
-        response = groq_client.chat.completions.create(
-            model="gemma2-9b-it",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        content = response.choices[0].message.content.strip()
-        
-        subject = content.split('\n')[0].replace('SUBJECT:', '').strip()
-        body = '\n'.join(content.split('\n')[1:]).strip()
+        # Generate email content
+        groq_client = get_groq_client()
+        if groq_client:
+            # Use LLM for email content
+            prompt = f"""
+            Based on this request: "{query}"
+            Generate a professional email with:
+            1. Professional greeting
+            2. Main message
+            3. Professional closing
+            4. Signature: Best regards,\nMilind Warade
+
+            Format your response as the email body only.
+            """
+            
+            response = groq_client.chat.completions.create(
+                model="gemma2-9b-it",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            body = response.choices[0].message.content.strip()
+        else:
+            # Fallback to simple email generation
+            body = f"""Hello,
+
+I'm reaching out regarding your request. {query.replace('send email to ' + recipient, '').replace('about ' + subject, '')}
+
+Please let me know if you need any further information.
+
+Best regards,
+Milind Warade"""
         
         try:
             sender = gmail.users().getProfile(userId='me').execute()['emailAddress']
@@ -356,6 +569,7 @@ Message:
 
 # Agent Manager Functions
 def route_query(state: AgentState) -> AgentState:
+    """Route the query to the appropriate action based on keywords or LLM."""
     query = state["query"]
     
     # Direct pattern matching for common cases to avoid LLM calls when possible
@@ -371,50 +585,65 @@ def route_query(state: AgentState) -> AgentState:
         state["actions"] = ["email"]
         return state
     
+    # Advanced pattern matching for more specific cases
+    if re.search(r'(meeting|appointment|call|interview)\s+(?:with|on)\s+', query, re.IGNORECASE):
+        state["actions"] = ["calendar_create"]
+        return state
+        
+    if re.search(r'what.*calendar', query, re.IGNORECASE) or re.search(r'(today|tomorrow|this week).*events', query, re.IGNORECASE):
+        state["actions"] = ["calendar_list"]
+        return state
+        
+    if re.search(r'(contact|message|reach out to)\s+.+@.+\..+', query, re.IGNORECASE):
+        state["actions"] = ["email"]
+        return state
+    
     # Fallback to LLM for more complex queries
-    prompt = f"""Analyze this query: "{query}"
-    Determine which agent(s) should handle it:
-    - calendar_create: Create calendar event (e.g. "schedule a meeting", "create event")
-    - calendar_list: List calendar events (e.g. "show my events", "list meetings")
-    - email: Send email (e.g. "send email", "compose message")
-    
-    Return JSON with array of required agents.
-    Example outputs:
-    - "schedule a meeting tomorrow" -> {"agents": ["calendar_create"]}
-    - "send email to john@example.com" -> {"agents": ["email"]}
-    - "show my next 5 events" -> {"agents": ["calendar_list"]}"""
-    
-    try:
-        groq_client = get_groq_client()
+    groq_client = get_groq_client()
+    if groq_client:
+        prompt = f"""Analyze this query: "{query}"
+        Determine which agent(s) should handle it:
+        - calendar_create: Create calendar event (e.g. "schedule a meeting", "create event")
+        - calendar_list: List calendar events (e.g. "show my events", "list meetings")
+        - email: Send email (e.g. "send email", "compose message")
         
-        if not groq_client:
-            state["actions"] = ["calendar_list"]  # Default fallback
-            state["final_response"] = "❌ Error initializing Groq client. Please check your API key."
-            return state
+        Return JSON with array of required agents.
+        Example outputs:
+        - "schedule a meeting tomorrow" -> {"agents": ["calendar_create"]}
+        - "send email to john@example.com" -> {"agents": ["email"]}
+        - "show my next 5 events" -> {"agents": ["calendar_list"]}"""
+        
+        try:
+            response = groq_client.chat.completions.create(
+                model="gemma2-9b-it",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
             
-        response = groq_client.chat.completions.create(
-            model="gemma2-9b-it",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
-        
-        response_content = response.choices[0].message.content
-        
-        # Safer JSON parsing with fallback
-        parsed_json = safe_json_parse(response_content, default={"agents": ["calendar_list"]})
-        required_agents = parsed_json.get("agents", ["calendar_list"])
-        
-        state["actions"] = required_agents
-        return state
-    except Exception as e:
-        # Log the exception
-        print(f"Error in route_query: {str(e)}")
-        # Ensure it's a list of strings
+            response_content = response.choices[0].message.content
+            
+            # Safer JSON parsing with fallback
+            parsed_json = safe_json_parse(response_content, default={"agents": ["calendar_list"]})
+            required_agents = parsed_json.get("agents", ["calendar_list"])
+            
+            state["actions"] = required_agents
+            return state
+        except Exception as e:
+            # Log the exception
+            print(f"Error in route_query: {str(e)}")
+    
+    # Default fallback - try to guess from keywords
+    if "schedule" in query.lower() or "meeting" in query.lower() or "event" in query.lower():
+        state["actions"] = ["calendar_create"]
+    elif "email" in query.lower() or "@" in query:
+        state["actions"] = ["email"]
+    else:
         state["actions"] = ["calendar_list"]  # Default fallback
-        state["final_response"] = f"❌ Error determining required agents: {str(e)}"
-        return state
+        
+    return state
 
 def execute_tools(state: AgentState) -> AgentState:
+    """Execute the appropriate actions based on the routing."""
     responses = []
     
     if not state["actions"]:
@@ -436,6 +665,7 @@ def execute_tools(state: AgentState) -> AgentState:
                 responses.append(f"Unknown action: {action}")
         except Exception as e:
             responses.append(f"❌ Error executing {action}: {str(e)}")
+            traceback.print_exc()
     
     if not responses:
         state["final_response"] = "I couldn't process your request. Please try again."
@@ -445,6 +675,7 @@ def execute_tools(state: AgentState) -> AgentState:
     return state
 
 def agent_manager(query: str) -> str:
+    """Create and execute the agent workflow."""
     # Create workflow
     workflow = StateGraph(AgentState)
     
@@ -475,6 +706,17 @@ def agent_manager(query: str) -> str:
     except Exception as e:
         traceback.print_exc()  # Print full traceback for debugging
         return f"Error processing your request: {str(e)}"
+
+# Cache initialization functions
+@st.cache_resource
+def initialize_apis():
+    """Initialize API clients with caching to avoid repeated initialization."""
+    groq = get_groq_client()
+    credentials = get_google_credentials()
+    return {"groq": groq, "google_credentials": credentials}
+
+# Initialize cached resources
+apis = initialize_apis()
 
 # Add custom CSS for styling input box
 st.markdown("""
