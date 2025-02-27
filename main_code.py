@@ -567,167 +567,74 @@ def list_calendar_events(query: str) -> str:
 #     except Exception as e:
 #         return f"❌ Failed to send email: {str(e)}"
 
-Gmail Agent Tool
-def generate_template_email(recipient, subject, content_info):
-    """Generate a template-based email when LLM generation fails."""
-    print(f"Debug: Generating template email with content_info: {content_info}")
-    
-    # Clean up content info to remove any redundant phrases
-    clean_content = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', content_info, flags=re.IGNORECASE)
-    clean_content = clean_content.strip()
-    
-    # Create a simple structured email
-    body_parts = [
-        "Hello,",
-        "",
-        f"I'm reaching out regarding {clean_content}.",
-        "",
-        "Please let me know if you need any further information.",
-        "",
-        "Best regards,",
-        "Milind Warade"
-    ]
-    
-    return "\n".join(body_parts)
+# ... existing code ...
 
 def send_email(query: str) -> str:
-    """Send an email based on the user query with improved content generation and error handling."""
-    print(f"Debug: send_email called with query: {query}")
+    """Send an email based on the user query."""
     try:
         credentials_path = get_google_credentials()
-        print(f"Debug: Using credentials from: {credentials_path}")
-        
         if not credentials_path:
-            print("Debug: No valid credentials found")
             return "❌ Google credentials not available. Unable to send email."
+        
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from email.mime.text import MIMEText
+        import base64
         
         # Initialize Gmail service
         creds = Credentials.from_authorized_user_file(credentials_path, 
             ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
         gmail = build('gmail', 'v1', credentials=creds)
-        print("Debug: Gmail service built successfully")
         
-        # Extract email address with more flexible regex
-        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-        email_matches = re.findall(email_pattern, query)
-        
-        if not email_matches:
-            print("Debug: No email address found in query")
-            # Try to find keywords like "to" followed by potential recipients
-            to_match = re.search(r'(?:to|send to|email to)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
-            if to_match:
-                recipient_name = to_match.group(1).strip()
-                return f"❌ Could not find a valid email address for '{recipient_name}'. Please include a complete email address."
+        # Extract email address
+        email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', query)
+        if not email_match:
             return "❌ No email address found in the query! Please include a valid email address."
             
-        recipient = email_matches[0]
-        print(f"Debug: Recipient email extracted: {recipient}")
+        recipient = email_match.group()
         
-        # Improved subject extraction with better pattern matching
+        # Extract subject if present (anything after "subject:" or "about")
         subject = "No Subject"
-        
-        # First try to find explicit subject indicators
-        subject_patterns = [
-            r'(?:subject|about|regarding|re|titled)[:|\s]\s*"?([^"\.]+)"?',
-            r'(?:email|message|send)\s+(?:with\s+subject|about|regarding)\s+"?([^"\.]+)"?',
-            r'with\s+(?:subject|title)\s+"?([^"\.]+)"?'
-        ]
-        
-        for pattern in subject_patterns:
-            subject_match = re.search(pattern, query, re.IGNORECASE)
-            if subject_match:
-                subject = subject_match.group(1).strip()
-                if subject.endswith('"'):
-                    subject = subject[:-1]  # Remove trailing quote if present
-                print(f"Debug: Subject extracted: {subject}")
-                break
-        
-        # If no subject found with explicit indicators, try to extract from the query
-        if subject == "No Subject":
-            # Look for typical subject phrases without explicit markers
-            content_phrases = [
-                r'asking (?:him|her|them) about (.*?)(?:$|\.|,)',
-                r'inquiring about (.*?)(?:$|\.|,)',
-                r'regarding (.*?)(?:$|\.|,)'
-            ]
+        subject_match = re.search(r'(?:subject:|about:?)\s+([^\n.]+)', query, re.IGNORECASE)
+        if subject_match:
+            subject = subject_match.group(1).strip()
             
-            for pattern in content_phrases:
-                content_match = re.search(pattern, query, re.IGNORECASE)
-                if content_match:
-                    subject = content_match.group(1).strip()
-                    print(f"Debug: Subject extracted from content phrase: {subject}")
-                    break
-                    
-        # Extract content/topic information by cleaning the query
-        # Remove recipient and subject portions for better content extraction
-        content_info = query
-        # Remove recipient portion
-        content_info = re.sub(rf'(?:to|send to|email to)\s+{re.escape(recipient)}', '', content_info, flags=re.IGNORECASE)
-        # Remove subject portion if we found one
-        if subject != "No Subject":
-            subject_pattern = rf'(?:subject|about|regarding|re|titled)[:|\s]\s*"?{re.escape(subject)}"?'
-            content_info = re.sub(subject_pattern, '', content_info, flags=re.IGNORECASE)
-        # Clean up common email request phrases
-        content_info = re.sub(r'send\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
-        content_info = re.sub(r'write\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
-        content_info = re.sub(r'compose\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
-        content_info = content_info.strip()
-        
-        print(f"Debug: Final content info extracted: {content_info}")
-        
         # Generate email content
         groq_client = get_groq_client()
         if groq_client:
-            print("Debug: Using Groq client for email content generation")
-            # Use LLM for email content with more specific instructions
+            # Use LLM for email content
             prompt = f"""
-            Generate a professional email based on this request: "{query}"
-            
-            From the request, I understand:
-            - Recipient: {recipient}
-            - Subject: {subject}
-            - Content relates to: {content_info}
-            
-            Create a concise, professional email that:
-            1. Has an appropriate greeting
-            2. Clearly communicates the main message about {subject if subject != "No Subject" else content_info}
-            3. Includes a professional closing
-            4. Ends with: "Best regards,\\nMilind Warade"
-            
-            Format your response as the complete email body only, ready to send.
+            Based on this request: "{query}"
+            Generate a professional email with:
+            1. Professional greeting
+            2. Main message
+            3. Professional closing
+            4. Signature: Best regards,\nMilind Warade
+
+            Format your response as the email body only.
             """
             
-            try:
-                response = groq_client.chat.completions.create(
-                    model="gemma2-9b-it",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
-                    max_tokens=500
-                )
-                
-                body = response.choices[0].message.content.strip()
-                print(f"Debug: Generated email body length: {len(body)}")
-                
-                # Fallback if LLM returns empty or very short content
-                if len(body) < 30:
-                    print("Debug: Generated content too short, using template")
-                    body = generate_template_email(recipient, subject, content_info)
-            except Exception as e:
-                print(f"Debug: Error generating email content with LLM: {str(e)}")
-                # Fallback to template-based email
-                body = generate_template_email(recipient, subject, content_info)
-        else:
-            print("Debug: No Groq client available, using template email")
-            # Use template-based email generation when LLM is unavailable
-            body = generate_template_email(recipient, subject, content_info)
-        
-        try:
-            # Get sender email
-            profile_response = gmail.users().getProfile(userId='me').execute()
-            sender = profile_response['emailAddress']
-            print(f"Debug: Sender email retrieved: {sender}")
+            response = groq_client.chat.completions.create(
+                model="gemma2-9b-it",
+                messages=[{"role": "user", "content": prompt}]
+            )
             
-            # Create and send message
+            body = response.choices[0].message.content.strip()
+        else:
+            # Fallback to simple email generation
+            body = f"""Hello,
+
+I'm reaching out regarding your request. {query.replace('send email to ' + recipient, '').replace('about ' + subject, '')}
+
+Please let me know if you need any further information.
+
+Best regards,
+Milind Warade"""
+
+        try:
+            sender = gmail.users().getProfile(userId='me').execute()['emailAddress']
+            
             message = MIMEText(body)
             message['to'] = recipient
             message['from'] = sender
@@ -735,9 +642,7 @@ def send_email(query: str) -> str:
             
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
-            print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
             
-            # Format response with email details
             final_response = f"""✅ Email sent successfully!
 To: {recipient}
 Subject: {subject}
@@ -745,14 +650,8 @@ Message:
 {body}"""
             return final_response
         except Exception as e:
-            error_trace = traceback.format_exc()
-            print(f"Debug: Error sending email: {str(e)}")
-            print(f"Debug: Traceback: {error_trace}")
-            return f"❌ Email sending failed: {str(e)}"
+            return f"❌ Email sending failed: {e}"
     except Exception as e:
-        error_trace = traceback.format_exc()
-        print(f"Debug: Error in send_email: {str(e)}")
-        print(f"Debug: Traceback: {error_trace}")
         return f"❌ Failed to send email: {str(e)}"
 
 # Agent Manager Functions
