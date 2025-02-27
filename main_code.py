@@ -1579,6 +1579,7 @@ def list_calendar_events(query: str) -> str:
 #         print(f"Debug: Traceback: {error_trace}")
 #         return f"❌ Failed to process email request: {str(e)}"
 
+
 #4
 
 import re
@@ -1589,13 +1590,7 @@ import base64
 def get_google_credentials():
     """Placeholder function - implement to return path to credentials file"""
     # Replace with actual implementation
-    import os
-    credentials_path = os.environ.get('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
-    
-    if not os.path.exists(credentials_path):
-        raise FileNotFoundError(f"Missing credentials file at {credentials_path}")
-        
-    return credentials_path
+    return "path/to/credentials.json"
 
 def get_groq_client():
     """Placeholder function - implement to return Groq client"""
@@ -1737,36 +1732,35 @@ def generate_subject(query):
             return " ".join(words).capitalize()
         return "Information Request"
 
+
+
 def send_email(query: str) -> str:
     """Send an email based on the user query."""
     print(f"Debug: send_email called with query: {query}")
     try:
-        credentials_path = get_google_credentials()
-        print(f"Debug: Using credentials from: {credentials_path}")
-        
-        if not credentials_path:
-            print("Debug: No valid credentials found")
-            return "❌ Google credentials not available. Unable to send email."
-        
-        # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-        
         # Extract email address
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         email_matches = re.findall(email_pattern, query)
         
         if not email_matches:
-            print("Debug: No email address found in query")
-            # Try to find keywords like "to" followed by potential recipients
-            to_match = re.search(r'(?:to|send to|email to)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
-            if to_match:
-                recipient_name = to_match.group(1).strip()
-                return f"❌ Could not find a valid email address for '{recipient_name}'. Please include a complete email address."
             return "❌ No email address found in the query! Please include a valid email address."
             
         recipient = email_matches[0]
         print(f"Debug: Recipient email extracted: {recipient}")
+        
+        # Get Google credentials
+        credentials_path = get_google_credentials()
+        if not credentials_path:
+            return "❌ Google credentials not available. Unable to send email."
+            
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
+        # Initialize Gmail service
+        creds = Credentials.from_authorized_user_file(credentials_path, 
+            ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
+        gmail = build('gmail', 'v1', credentials=creds)
         
         # Extract recipient name from email
         recipient_name = extract_recipient_name(recipient)
@@ -1781,16 +1775,9 @@ def send_email(query: str) -> str:
         print(f"Debug: Email body generated with length: {len(body)}")
         
         try:
-            # Initialize Gmail service
-            creds = Credentials.from_authorized_user_file(credentials_path, 
-                ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
-            gmail = build('gmail', 'v1', credentials=creds)
-            print("Debug: Gmail service built successfully")
-            
             # Get sender email
             profile_response = gmail.users().getProfile(userId='me').execute()
             sender = profile_response['emailAddress']
-            print(f"Debug: Sender email retrieved: {sender}")
             
             # Create and send message
             message = MIMEText(body)
@@ -1800,9 +1787,8 @@ def send_email(query: str) -> str:
             
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
-            print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
             
-            # Format response with email details
+            # Format success response
             return f"""✅ Email sent successfully!
 To: {recipient}
 Subject: {subject}
@@ -1819,7 +1805,10 @@ Message:
         error_trace = traceback.format_exc()
         print(f"Debug: Error in send_email: {str(e)}")
         print(f"Debug: Traceback: {error_trace}")
-        return f"❌ Failed to send email: {str(e)}"
+        return f"❌ Failed to process email request: {str(e)}"
+
+
+
 
 
 
