@@ -1343,6 +1343,244 @@ def list_calendar_events(query: str) -> str:
 
 #3
 
+# import re
+# import traceback
+# from email.mime.text import MIMEText
+# import base64
+
+# def get_google_credentials():
+#     """Placeholder function - implement to return path to credentials file"""
+#     # Replace with actual implementation
+#     return "path/to/credentials.json"
+
+# def get_groq_client():
+#     """Placeholder function - implement to return Groq client"""
+#     # Replace with actual implementation
+#     return None
+
+# def generate_email_content(recipient_name, subject, query):
+#     """Generate professional email content for office environment queries."""
+#     # Extract the main content/purpose from the query
+#     content = extract_main_content(query)
+    
+#     # Standard professional email template
+#     body = [
+#         f"Hello {recipient_name},",
+#         "",
+#         "I hope this email finds you well."
+#     ]
+    
+#     # Add appropriate content based on query type
+#     if "access" in query.lower() and "software" in query.lower():
+#         body.extend([
+#             "",
+#             "I am writing to request access to the new software. I would need this access to perform my duties effectively.",
+#             "",
+#             "Could you please provide me with the necessary credentials or instructions to access the system?"
+#         ])
+#     elif "update" in query.lower() or "status" in query.lower() or "progress" in query.lower():
+#         # For project update requests
+#         project = extract_project_name(query) or "the project"
+#         body.extend([
+#             "",
+#             f"I am writing to request an update on {project}.",
+#             "",
+#             "Could you please share with me:",
+#             "- Current progress and status",
+#             "- Any challenges or blockers faced",
+#             "- Expected timeline for completion"
+#         ])
+#     elif "meeting" in query.lower() or "schedule" in query.lower():
+#         # For meeting requests
+#         body.extend([
+#             "",
+#             "I would like to schedule a meeting to discuss our current projects and priorities.",
+#             "",
+#             "Please let me know your availability for next week so we can find a suitable time."
+#         ])
+#     elif "document" in query.lower() or "file" in query.lower():
+#         # For document requests
+#         body.extend([
+#             "",
+#             "I am writing to request the documents related to our recent project.",
+#             "",
+#             "Could you please share these files with me at your earliest convenience?"
+#         ])
+#     elif "benefits" in query.lower():
+#         topic = extract_benefit_topic(query) or "the program"
+#         body.extend([
+#             "",
+#             f"I wanted to share with you some key benefits of {topic}:",
+#             "",
+#             "- Improved efficiency and productivity",
+#             "- Cost savings and resource optimization",
+#             "- Enhanced collaboration and communication",
+#             "- Better outcomes and quality results",
+#             "",
+#             f"I believe implementing {topic} would be valuable for our team."
+#         ])
+#     else:
+#         # Generic professional content for any other query
+#         body.extend([
+#             "",
+#             f"{content}",
+#             "",
+#             "I look forward to your insights on this matter."
+#         ])
+    
+#     body.extend([
+#         "",
+#         "I would appreciate your response at your earliest convenience. If you need any additional information or have questions, please don't hesitate to ask.",
+#         "",
+#         "Best regards,",
+#         "Milind Warade"
+#     ])
+    
+#     return "\n".join(body)
+
+# def extract_main_content(query):
+#     """Extract the main content/purpose from the query."""
+#     # Remove email addresses
+#     cleaned = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', query)
+    
+#     # Remove email related commands
+#     cleaned = re.sub(r'(?:send|write|compose|email)\s+(?:an|a)?\s*email\s+(?:to|about|regarding|on|with)?', '', cleaned, flags=re.IGNORECASE)
+    
+#     # Remove "requesting" if it exists
+#     cleaned = re.sub(r'requesting\s+', '', cleaned, flags=re.IGNORECASE)
+    
+#     # This is our main content
+#     return cleaned.strip()
+
+# def extract_project_name(query):
+#     """Extract project name from query if available."""
+#     match = re.search(r'(?:project|task)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     return match.group(1).strip() if match else None
+
+# def extract_benefit_topic(query):
+#     """Extract topic for benefits discussion."""
+#     match = re.search(r'benefits\s+of\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     return match.group(1).strip() if match else None
+
+# def extract_recipient_name(email):
+#     """Extract recipient name from email address."""
+#     name = email.split('@')[0]
+#     # Convert email format to proper name (e.g., john.doe -> John Doe)
+#     if '.' in name:
+#         parts = name.split('.')
+#         return ' '.join(part.capitalize() for part in parts)
+#     return name.capitalize()
+
+# def generate_subject(query):
+#     """Generate appropriate subject line based on query content."""
+#     if "access" in query.lower() and "software" in query.lower():
+#         return "Request for Software Access"
+#     elif "update" in query.lower() or "status" in query.lower() or "progress" in query.lower():
+#         project = extract_project_name(query)
+#         return f"Status Update Request: {project}" if project else "Project Status Update Request"
+#     elif "meeting" in query.lower() or "schedule" in query.lower():
+#         return "Meeting Request"
+#     elif "document" in query.lower() or "file" in query.lower():
+#         return "Document Request"
+#     elif "benefits" in query.lower():
+#         topic = extract_benefit_topic(query)
+#         return f"Benefits of {topic.capitalize()}" if topic else "Information on Benefits"
+#     else:
+#         # Generic subject that uses the first few words of content
+#         content = extract_main_content(query)
+#         words = content.split()[:3]  # First 3 words
+#         if words:
+#             return " ".join(words).capitalize()
+#         return "Information Request"
+
+# def send_email(query: str) -> str:
+#     """Send an email based on the user query."""
+#     print(f"Debug: send_email called with query: {query}")
+#     try:
+#         # Extract email address
+#         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+#         email_matches = re.findall(email_pattern, query)
+        
+#         if not email_matches:
+#             return "❌ No email address found in the query! Please include a valid email address."
+            
+#         recipient = email_matches[0]
+#         print(f"Debug: Recipient email extracted: {recipient}")
+        
+#         # Extract recipient name from email
+#         recipient_name = extract_recipient_name(recipient)
+#         print(f"Debug: Recipient name extracted: {recipient_name}")
+        
+#         # Generate a relevant subject line
+#         subject = generate_subject(query)
+#         print(f"Debug: Subject generated: {subject}")
+        
+#         # Generate email content
+#         body = generate_email_content(recipient_name, subject, query)
+#         print(f"Debug: Email body generated with length: {len(body)}")
+        
+#         try:
+#             # Get Google credentials and initialize Gmail API
+#             credentials_path = get_google_credentials()
+            
+#             if not credentials_path:
+#                 print("Debug: No valid credentials found")
+#                 # Since we can't send the email, just return as if it was sent for demo purposes
+#                 return f"""✅ Email would be sent (demo mode):
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+            
+#             # Import Google libraries only when needed
+#             from google.oauth2.credentials import Credentials
+#             from googleapiclient.discovery import build
+            
+#             # Initialize Gmail service
+#             creds = Credentials.from_authorized_user_file(credentials_path, 
+#                 ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
+#             gmail = build('gmail', 'v1', credentials=creds)
+            
+#             # Get sender email
+#             profile_response = gmail.users().getProfile(userId='me').execute()
+#             sender = profile_response['emailAddress']
+            
+#             # Create and send message
+#             message = MIMEText(body)
+#             message['to'] = recipient
+#             message['from'] = sender
+#             message['subject'] = subject
+            
+#             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+#             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            
+#             # Format success response
+#             return f"""✅ Email sent successfully!
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+            
+#         except Exception as e:
+#             error_trace = traceback.format_exc()
+#             print(f"Debug: Error sending email: {str(e)}")
+#             print(f"Debug: Traceback: {error_trace}")
+            
+#             # For demonstration, return as if email was sent
+#             return f"""✅ Email would be sent (demo mode):
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+            
+#     except Exception as e:
+#         error_trace = traceback.format_exc()
+#         print(f"Debug: Error in send_email: {str(e)}")
+#         print(f"Debug: Traceback: {error_trace}")
+#         return f"❌ Failed to process email request: {str(e)}"
+
+#4
+
 import re
 import traceback
 from email.mime.text import MIMEText
@@ -1351,7 +1589,13 @@ import base64
 def get_google_credentials():
     """Placeholder function - implement to return path to credentials file"""
     # Replace with actual implementation
-    return "path/to/credentials.json"
+    import os
+    credentials_path = os.environ.get('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
+    
+    if not os.path.exists(credentials_path):
+        raise FileNotFoundError(f"Missing credentials file at {credentials_path}")
+        
+    return credentials_path
 
 def get_groq_client():
     """Placeholder function - implement to return Groq client"""
@@ -1497,11 +1741,28 @@ def send_email(query: str) -> str:
     """Send an email based on the user query."""
     print(f"Debug: send_email called with query: {query}")
     try:
+        credentials_path = get_google_credentials()
+        print(f"Debug: Using credentials from: {credentials_path}")
+        
+        if not credentials_path:
+            print("Debug: No valid credentials found")
+            return "❌ Google credentials not available. Unable to send email."
+        
+        # Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
         # Extract email address
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         email_matches = re.findall(email_pattern, query)
         
         if not email_matches:
+            print("Debug: No email address found in query")
+            # Try to find keywords like "to" followed by potential recipients
+            to_match = re.search(r'(?:to|send to|email to)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+            if to_match:
+                recipient_name = to_match.group(1).strip()
+                return f"❌ Could not find a valid email address for '{recipient_name}'. Please include a complete email address."
             return "❌ No email address found in the query! Please include a valid email address."
             
         recipient = email_matches[0]
@@ -1520,30 +1781,16 @@ def send_email(query: str) -> str:
         print(f"Debug: Email body generated with length: {len(body)}")
         
         try:
-            # Get Google credentials and initialize Gmail API
-            credentials_path = get_google_credentials()
-            
-            if not credentials_path:
-                print("Debug: No valid credentials found")
-                # Since we can't send the email, just return as if it was sent for demo purposes
-                return f"""✅ Email would be sent (demo mode):
-To: {recipient}
-Subject: {subject}
-Message:
-{body}"""
-            
-            # Import Google libraries only when needed
-            from google.oauth2.credentials import Credentials
-            from googleapiclient.discovery import build
-            
             # Initialize Gmail service
             creds = Credentials.from_authorized_user_file(credentials_path, 
                 ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
             gmail = build('gmail', 'v1', credentials=creds)
+            print("Debug: Gmail service built successfully")
             
             # Get sender email
             profile_response = gmail.users().getProfile(userId='me').execute()
             sender = profile_response['emailAddress']
+            print(f"Debug: Sender email retrieved: {sender}")
             
             # Create and send message
             message = MIMEText(body)
@@ -1553,8 +1800,9 @@ Message:
             
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
             
-            # Format success response
+            # Format response with email details
             return f"""✅ Email sent successfully!
 To: {recipient}
 Subject: {subject}
@@ -1565,19 +1813,15 @@ Message:
             error_trace = traceback.format_exc()
             print(f"Debug: Error sending email: {str(e)}")
             print(f"Debug: Traceback: {error_trace}")
-            
-            # For demonstration, return as if email was sent
-            return f"""✅ Email would be sent (demo mode):
-To: {recipient}
-Subject: {subject}
-Message:
-{body}"""
+            return f"❌ Email sending failed: {str(e)}"
             
     except Exception as e:
         error_trace = traceback.format_exc()
         print(f"Debug: Error in send_email: {str(e)}")
         print(f"Debug: Traceback: {error_trace}")
-        return f"❌ Failed to process email request: {str(e)}"
+        return f"❌ Failed to send email: {str(e)}"
+
+
 
 # Agent Manager Functions
 def route_query(state: AgentState) -> AgentState:
