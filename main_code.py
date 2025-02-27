@@ -604,6 +604,11 @@ def send_email(query: str) -> str:
         if not credentials_path:
             print("Debug: No valid credentials found")
             return "❌ Google credentials not available. Unable to send email."
+        ##Import Google libraries only when needed
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from email.mime.text import MIMEText
+        import base64
         
         # Initialize Gmail service
         creds = Credentials.from_authorized_user_file(credentials_path, 
