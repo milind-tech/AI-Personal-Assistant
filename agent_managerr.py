@@ -12,24 +12,22 @@ import re
 import pytz
 from langgraph.graph import Graph, StateGraph
 import os
-api_key = os.getenv("API_KEY")  # Load from environment
 
+# Define state management
+class AgentState(TypedDict):
+    query: str
+    actions: List[str]
+    current_agent: str
+    final_response: str
 
-# # Debug API Key Loading
-# st.write("Checking Streamlit Secrets...")  # This helps verify execution
-# api_key = st.secrets.get("GROQ_API_KEY", None)
-
-# if not api_key:
-#     st.error("🚨 GROQ_API_KEY is missing! Please check Streamlit secrets.")
-# else:
-#     st.success("✅ GROQ_API_KEY is loaded!")
-
-# Initialize Groq Client
-if api_key:
-    # groq_client = Groq(api_key=api_key)
-
-    groq_client = Client(api_key=api_key)  # Ensure correct import
-
+# Initialize Groq client inside a function instead of at module level
+def get_groq_client():
+    try:
+        api_key = st.secrets["GROQ_API_KEY"]
+        return Client(api_key=api_key)
+    except Exception as e:
+        st.error(f"Error initializing Groq client: {e}")
+        return None
 
 def get_google_credentials():
     """Get Google credentials from Streamlit secrets or local file."""
@@ -44,17 +42,6 @@ def get_google_credentials():
         return temp.name
     else:
         return 'token.json'  # Fallback for local development
-# Initialize Groq client
-groq_client = Client(api_key=st.secrets["GROQ_API_KEY"])
-
-# Define state management
-class AgentState(TypedDict):
-    query: str
-    actions: List[str]
-    current_agent: str
-    final_response: str
-
-
 
 def create_calendar_event(query: str) -> str:
     calendar = build('calendar', 'v3', 
@@ -81,12 +68,17 @@ def create_calendar_event(query: str) -> str:
     For example, if the query is "Schedule a project kickoff meeting on 22nd March from 4 PM to 6 PM at the Innovation Hub", 
     the end_time should be "18:00" (not "17:00")."""
 
+    groq_client = get_groq_client()
+    if not groq_client:
+        return "❌ Error initializing Groq client. Please check your API key."
+        
     response = groq_client.chat.completions.create(
         model="gemma2-9b-it",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )
     
+    # Rest of your function remains the same
     # Parse the LLM response
     event_details = json.loads(response.choices[0].message.content)
     
@@ -205,13 +197,17 @@ def create_calendar_event(query: str) -> str:
     
     return "\n".join(response_parts)
 
-
 def list_calendar_events(query: str) -> str:
     calendar = build('calendar', 'v3', 
         credentials=Credentials.from_authorized_user_file(get_google_credentials(), 
             ['https://www.googleapis.com/auth/calendar.readonly']))
     
     prompt = f"""From '{query}' extract number of events to show. Default is 10. Return just the number."""
+    
+    groq_client = get_groq_client()
+    if not groq_client:
+        return "❌ Error initializing Groq client. Please check your API key."
+        
     response = groq_client.chat.completions.create(
         model="gemma2-9b-it",
         messages=[{"role": "user", "content": prompt}]
@@ -277,6 +273,10 @@ def send_email(query: str) -> str:
     [email body with signature]
     """
     
+    groq_client = get_groq_client()
+    if not groq_client:
+        return "❌ Error initializing Groq client. Please check your API key."
+        
     response = groq_client.chat.completions.create(
         model="gemma2-9b-it",
         messages=[{"role": "user", "content": prompt}]
@@ -320,6 +320,12 @@ def route_query(state: AgentState) -> Dict[str, Any]:
     - "send email to john@example.com" -> ["email"]
     - "show my next 5 events" -> ["calendar_list"]"""
     
+    groq_client = get_groq_client()
+    if not groq_client:
+        state["actions"] = []
+        state["final_response"] = "❌ Error initializing Groq client. Please check your API key."
+        return state
+        
     response = groq_client.chat.completions.create(
         model="gemma2-9b-it",
         messages=[{"role": "user", "content": prompt}],
