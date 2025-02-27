@@ -328,6 +328,28 @@ def list_calendar_events(query: str) -> str:
         return f"❌ Failed to list calendar events: {str(e)}"
 
 # Gmail Agent Tool
+def generate_template_email(recipient, subject, content_info):
+    """Generate a template-based email when LLM generation fails."""
+    print(f"Debug: Generating template email with content_info: {content_info}")
+    
+    # Clean up content info to remove any redundant phrases
+    clean_content = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', content_info, flags=re.IGNORECASE)
+    clean_content = clean_content.strip()
+    
+    # Create a simple structured email
+    body_parts = [
+        "Hello,",
+        "",
+        f"I'm reaching out regarding {clean_content}.",
+        "",
+        "Please let me know if you need any further information.",
+        "",
+        "Best regards,",
+        "Milind Warade"
+    ]
+    
+    return "\n".join(body_parts)
+
 def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation and error handling."""
     print(f"Debug: send_email called with query: {query}")
@@ -361,27 +383,57 @@ def send_email(query: str) -> str:
         recipient = email_matches[0]
         print(f"Debug: Recipient email extracted: {recipient}")
         
-        # Extract subject with improved pattern matching
+        # Improved subject extraction with better pattern matching
         subject = "No Subject"
+        
+        # First try to find explicit subject indicators
         subject_patterns = [
-            r'(?:subject|about|regarding|re)[:|\s]\s*([^\.]+)',
-            r'(?:email|message|send)\s+(?:about|regarding)\s+([^\.]+)',
-            r'with\s+(?:subject|title)\s+([^\.]+)'
+            r'(?:subject|about|regarding|re|titled)[:|\s]\s*"?([^"\.]+)"?',
+            r'(?:email|message|send)\s+(?:with\s+subject|about|regarding)\s+"?([^"\.]+)"?',
+            r'with\s+(?:subject|title)\s+"?([^"\.]+)"?'
         ]
         
         for pattern in subject_patterns:
             subject_match = re.search(pattern, query, re.IGNORECASE)
             if subject_match:
                 subject = subject_match.group(1).strip()
+                if subject.endswith('"'):
+                    subject = subject[:-1]  # Remove trailing quote if present
                 print(f"Debug: Subject extracted: {subject}")
                 break
-                
-        # Extract content/topic information by removing email and subject portions
+        
+        # If no subject found with explicit indicators, try to extract from the query
+        if subject == "No Subject":
+            # Look for typical subject phrases without explicit markers
+            content_phrases = [
+                r'asking (?:him|her|them) about (.*?)(?:$|\.|,)',
+                r'inquiring about (.*?)(?:$|\.|,)',
+                r'regarding (.*?)(?:$|\.|,)'
+            ]
+            
+            for pattern in content_phrases:
+                content_match = re.search(pattern, query, re.IGNORECASE)
+                if content_match:
+                    subject = content_match.group(1).strip()
+                    print(f"Debug: Subject extracted from content phrase: {subject}")
+                    break
+                    
+        # Extract content/topic information by cleaning the query
+        # Remove recipient and subject portions for better content extraction
         content_info = query
+        # Remove recipient portion
         content_info = re.sub(rf'(?:to|send to|email to)\s+{re.escape(recipient)}', '', content_info, flags=re.IGNORECASE)
-        content_info = re.sub(rf'(?:subject|about|regarding|re)[:|\s]\s*{re.escape(subject)}', '', content_info, flags=re.IGNORECASE)
-        content_info = re.sub(r'send\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE).strip()
-        print(f"Debug: Content info extracted: {content_info}")
+        # Remove subject portion if we found one
+        if subject != "No Subject":
+            subject_pattern = rf'(?:subject|about|regarding|re|titled)[:|\s]\s*"?{re.escape(subject)}"?'
+            content_info = re.sub(subject_pattern, '', content_info, flags=re.IGNORECASE)
+        # Clean up common email request phrases
+        content_info = re.sub(r'send\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
+        content_info = re.sub(r'write\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
+        content_info = re.sub(r'compose\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE)
+        content_info = content_info.strip()
+        
+        print(f"Debug: Final content info extracted: {content_info}")
         
         # Generate email content
         groq_client = get_groq_client()
@@ -398,9 +450,9 @@ def send_email(query: str) -> str:
             
             Create a concise, professional email that:
             1. Has an appropriate greeting
-            2. Clearly communicates the main message
+            2. Clearly communicates the main message about {subject if subject != "No Subject" else content_info}
             3. Includes a professional closing
-            4. Signature: Best regards,\\nMilind Warade
+            4. Ends with: "Best regards,\\nMilind Warade"
             
             Format your response as the complete email body only, ready to send.
             """
