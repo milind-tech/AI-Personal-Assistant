@@ -1177,6 +1177,23 @@ def extract_subject_from_query(query):
     # Generic fallback
     return "Information Request"
 
+def extract_recipient_name(query, recipient_email):
+    """Extract the recipient's name from the query or email address."""
+    # Look for patterns like "to John" or "ask Sarah"
+    name_pattern = r'(?:to|ask|tell|email)\s+([A-Z][a-z]+)(?:\s|,|\.)'
+    name_match = re.search(name_pattern, query, re.IGNORECASE)
+    
+    if name_match:
+        return name_match.group(1)
+    
+    # Try to extract name from email (before @ symbol)
+    email_name = recipient_email.split('@')[0]
+    # Convert email format to proper name (e.g., john.doe -> John Doe)
+    if '.' in email_name:
+        parts = email_name.split('.')
+        return ' '.join(part.capitalize() for part in parts)
+    return email_name.capitalize()
+
 def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation and error handling."""
     print(f"Debug: send_email called with query: {query}")
