@@ -567,7 +567,7 @@ def list_calendar_events(query: str) -> str:
 #     except Exception as e:
 #         return f"❌ Failed to send email: {str(e)}"
 
-# Gmail Agent Tool
+Gmail Agent Tool
 def generate_template_email(recipient, subject, content_info):
     """Generate a template-based email when LLM generation fails."""
     print(f"Debug: Generating template email with content_info: {content_info}")
