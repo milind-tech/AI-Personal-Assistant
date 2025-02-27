@@ -330,27 +330,27 @@ def list_calendar_events(query: str) -> str:
 # Gmail Agent Tool
 def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation and error handling."""
+    print(f"Debug: send_email called with query: {query}")
     try:
         credentials_path = get_google_credentials()
-        if not credentials_path:
-            return "❌ Google credentials not available. Unable to send email."
+        print(f"Debug: Using credentials from: {credentials_path}")
         
-        # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-        from email.mime.text import MIMEText
-        import base64
+        if not credentials_path:
+            print("Debug: No valid credentials found")
+            return "❌ Google credentials not available. Unable to send email."
         
         # Initialize Gmail service
         creds = Credentials.from_authorized_user_file(credentials_path, 
             ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
         gmail = build('gmail', 'v1', credentials=creds)
+        print("Debug: Gmail service built successfully")
         
-        # Extract email address with improved regex that handles multiple formats
+        # Extract email address with more flexible regex
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-        email_match = re.search(email_pattern, query)
+        email_matches = re.findall(email_pattern, query)
         
-        if not email_match:
+        if not email_matches:
+            print("Debug: No email address found in query")
             # Try to find keywords like "to" followed by potential recipients
             to_match = re.search(r'(?:to|send to|email to)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
             if to_match:
@@ -358,28 +358,35 @@ def send_email(query: str) -> str:
                 return f"❌ Could not find a valid email address for '{recipient_name}'. Please include a complete email address."
             return "❌ No email address found in the query! Please include a valid email address."
             
-        recipient = email_match.group()
+        recipient = email_matches[0]
+        print(f"Debug: Recipient email extracted: {recipient}")
         
         # Extract subject with improved pattern matching
         subject = "No Subject"
         subject_patterns = [
             r'(?:subject|about|regarding|re)[:|\s]\s*([^\.]+)',
-            r'(?:email|message|send)\s+(?:about|regarding)\s+([^\.]+)'
+            r'(?:email|message|send)\s+(?:about|regarding)\s+([^\.]+)',
+            r'with\s+(?:subject|title)\s+([^\.]+)'
         ]
         
         for pattern in subject_patterns:
             subject_match = re.search(pattern, query, re.IGNORECASE)
             if subject_match:
                 subject = subject_match.group(1).strip()
+                print(f"Debug: Subject extracted: {subject}")
                 break
                 
-        # Extract content/topic information
-        content_info = query.replace(f"to {recipient}", "").replace(f"about {subject}", "")
+        # Extract content/topic information by removing email and subject portions
+        content_info = query
+        content_info = re.sub(rf'(?:to|send to|email to)\s+{re.escape(recipient)}', '', content_info, flags=re.IGNORECASE)
+        content_info = re.sub(rf'(?:subject|about|regarding|re)[:|\s]\s*{re.escape(subject)}', '', content_info, flags=re.IGNORECASE)
         content_info = re.sub(r'send\s+(?:an)?\s*email', '', content_info, flags=re.IGNORECASE).strip()
+        print(f"Debug: Content info extracted: {content_info}")
         
         # Generate email content
         groq_client = get_groq_client()
         if groq_client:
+            print("Debug: Using Groq client for email content generation")
             # Use LLM for email content with more specific instructions
             prompt = f"""
             Generate a professional email based on this request: "{query}"
@@ -391,7 +398,7 @@ def send_email(query: str) -> str:
             
             Create a concise, professional email that:
             1. Has an appropriate greeting
-            2. Clearly communicates the main message in 2-3 paragraphs
+            2. Clearly communicates the main message
             3. Includes a professional closing
             4. Signature: Best regards,\\nMilind Warade
             
@@ -400,27 +407,33 @@ def send_email(query: str) -> str:
             
             try:
                 response = groq_client.chat.completions.create(
-                    model="gemma2-9b-it",  # Using a consistent model
+                    model="gemma2-9b-it",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,  # Adding some creativity while remaining professional
-                    max_tokens=500  # Limiting length for efficiency
+                    temperature=0.7,
+                    max_tokens=500
                 )
                 
                 body = response.choices[0].message.content.strip()
+                print(f"Debug: Generated email body length: {len(body)}")
                 
                 # Fallback if LLM returns empty or very short content
                 if len(body) < 30:
-                    raise Exception("Generated content too short")
+                    print("Debug: Generated content too short, using template")
+                    body = generate_template_email(recipient, subject, content_info)
             except Exception as e:
+                print(f"Debug: Error generating email content with LLM: {str(e)}")
                 # Fallback to template-based email
                 body = generate_template_email(recipient, subject, content_info)
         else:
+            print("Debug: No Groq client available, using template email")
             # Use template-based email generation when LLM is unavailable
             body = generate_template_email(recipient, subject, content_info)
         
         try:
             # Get sender email
-            sender = gmail.users().getProfile(userId='me').execute()['emailAddress']
+            profile_response = gmail.users().getProfile(userId='me').execute()
+            sender = profile_response['emailAddress']
+            print(f"Debug: Sender email retrieved: {sender}")
             
             # Create and send message
             message = MIMEText(body)
@@ -430,6 +443,7 @@ def send_email(query: str) -> str:
             
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
             
             # Format response with email details
             final_response = f"""✅ Email sent successfully!
@@ -439,52 +453,36 @@ Message:
 {body}"""
             return final_response
         except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"Debug: Error sending email: {str(e)}")
+            print(f"Debug: Traceback: {error_trace}")
             return f"❌ Email sending failed: {str(e)}"
     except Exception as e:
-        return f"❌ Failed to send email: {str(e)}\n{traceback.format_exc()}"
-
-def generate_template_email(recipient, subject, content_info):
-    """Generate a template-based email when LLM is unavailable."""
-    # Extract name from email if possible
-    name_match = re.match(r'([^@]+)@', recipient)
-    recipient_name = name_match.group(1).replace(".", " ").title() if name_match else "Recipient"
-    
-    # Current date for the email
-    current_date = datetime.now().strftime("%B %d, %Y")
-    
-    # Generate a more contextual email based on available information
-    if "list" in content_info.lower() or "top" in content_info.lower():
-        return f"""Hello {recipient_name},
-
-I hope this email finds you well. I am writing to share the information you requested about {subject or 'the requested topic'}.
-
-{content_info.strip() or 'As discussed, I wanted to follow up with the relevant details. Please let me know if you need any clarification or have additional questions.'}
-
-Thank you for your attention to this matter.
-
-Best regards,
-Milind Warade
-
-Date: {current_date}"""
-    else:
-        return f"""Hello {recipient_name},
-
-I hope this email finds you well. I am reaching out regarding {subject or 'an important matter'}.
-
-{content_info.strip() or 'I wanted to touch base with you about our recent discussions. Please review the information and let me know your thoughts or if you need any additional details.'}
-
-Thank you for your time and consideration.
-
-Best regards,
-Milind Warade
-
-Date: {current_date}"""
+        error_trace = traceback.format_exc()
+        print(f"Debug: Error in send_email: {str(e)}")
+        print(f"Debug: Traceback: {error_trace}")
+        return f"❌ Failed to send email: {str(e)}"
 
 # Agent Manager Functions
 def route_query(state: AgentState) -> Dict[str, Any]:
     print(f"Debug: route_query started with query: {state['query']}")
     query = state["query"]
     
+    # Look for email addresses directly which is a strong signal for email intent
+    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    if re.search(email_pattern, query):
+        print("Debug: Email address found in query, routing to email agent")
+        state["actions"] = ["email"]
+        return state
+    
+    # Check for explicit email keywords
+    email_keywords = ["send email", "compose email", "write email", "mail to", "email to"]
+    if any(keyword in query.lower() for keyword in email_keywords):
+        print("Debug: Email keywords found in query, routing to email agent")
+        state["actions"] = ["email"]
+        return state
+    
+    # For other queries, use LLM-based routing
     prompt = f"""Analyze this query: "{query}"
     Determine which agent(s) should handle it:
     - calendar_create: Create calendar event (e.g. "schedule a meeting", "create event")
@@ -499,7 +497,7 @@ def route_query(state: AgentState) -> Dict[str, Any]:
     
     try:
         groq_client = get_groq_client()
-        print("Debug: Groq client initialized")
+        print("Debug: Groq client initialized for routing")
         
         if not groq_client:
             print("Debug: Groq client initialization failed")
@@ -531,7 +529,7 @@ def route_query(state: AgentState) -> Dict[str, Any]:
         state["actions"] = ["calendar_list"]  # Default fallback
         state["final_response"] = f"❌ Error determining required agents: {str(e)}"
         return state
-
+    
 def execute_tools(state: AgentState) -> Dict[str, Any]:
     print(f"Debug: execute_tools started with actions: {state['actions']}")
     responses = []
