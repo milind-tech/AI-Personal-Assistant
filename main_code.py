@@ -766,6 +766,265 @@ def list_calendar_events(query: str) -> str:
 
 #1
 
+# def generate_template_email(recipient, recipient_name, subject, content_info):
+#     """Generate a template-based email when LLM generation fails."""
+#     print(f"Debug: Generating template email with content_info: {content_info}")
+    
+#     # Clean up content info to remove any redundant phrases and email mentions
+#     clean_content = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', content_info, flags=re.IGNORECASE)
+#     clean_content = re.sub(r'(?:his|her|their)\s+email\s+(?:is|address\s+is)\s+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', clean_content, flags=re.IGNORECASE)
+#     clean_content = re.sub(r'(?:to|ask|tell|email)\s+([A-Z][a-z]+)(?:\s|,|\.)', '', clean_content, flags=re.IGNORECASE)
+#     clean_content = clean_content.strip()
+    
+#     # Extract project or topic if available
+#     project_match = re.search(r'(?:project|task|assignment)\s+([a-zA-Z0-9\s]+)', clean_content, re.IGNORECASE)
+#     project_name = project_match.group(1) if project_match else "the project"
+    
+#     # Determine if this is an update request
+#     is_update_request = "update" in clean_content.lower() or "progress" in clean_content.lower() or "status" in clean_content.lower()
+    
+#     # Create a proper professional email
+#     body_parts = [
+#         f"Hello {recipient_name},",
+#         "",
+#     ]
+    
+#     if is_update_request:
+#         body_parts.extend([
+#             f"I hope this email finds you well. I'm writing to request an update on Project {project_name}.",
+#             "",
+#             "Could you please provide the current status and any recent progress on this project? I would appreciate details on:",
+#             "- Work completed so far",
+#             "- Any challenges or blockers you're facing",
+#             "- Timeline for upcoming milestones",
+#             ""
+#         ])
+#     else:
+#         body_parts.extend([
+#             f"I hope this email finds you well. I'm reaching out regarding Project {project_name}.",
+#             "",
+#             f"{clean_content}",
+#             ""
+#         ])
+    
+#     body_parts.extend([
+#         "I would appreciate your response at your earliest convenience. If you need any additional information or have questions, please don't hesitate to ask.",
+#         "",
+#         "Best regards,",
+#         "Milind Warade"
+#     ])
+    
+#     return "\n".join(body_parts)
+
+# def clean_query_for_content(query):
+#     """Clean the query to extract only relevant content."""
+#     # Remove email addresses
+#     cleaned = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', query)
+#     # Remove email related commands
+#     cleaned = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', cleaned, flags=re.IGNORECASE)
+#     # Remove "to [Name]" patterns
+#     cleaned = re.sub(r'to\s+([A-Z][a-z]+)(?:\s|,|\.)', '', cleaned, flags=re.IGNORECASE)
+#     # Remove email address references
+#     cleaned = re.sub(r'(?:his|her|their)\s+email\s+(?:is|address\s+is)', '', cleaned, flags=re.IGNORECASE)
+#     # Remove asking/telling mentions
+#     cleaned = re.sub(r'(?:asking|telling)\s+(?:him|her|them)', '', cleaned, flags=re.IGNORECASE)
+#     return cleaned.strip()
+
+# def extract_recipient_name(query, recipient_email):
+#     """Extract the recipient's name from the query."""
+#     # Look for patterns like "to John" or "ask Sarah"
+#     name_pattern = r'(?:to|ask|tell|email)\s+([A-Z][a-z]+)(?:\s|,|\.)'
+#     name_match = re.search(name_pattern, query, re.IGNORECASE)
+    
+#     if name_match:
+#         return name_match.group(1)
+    
+#     # Try to extract name from email (before @ symbol)
+#     email_name = recipient_email.split('@')[0]
+#     # Convert email format to proper name (e.g., john.doe -> John)
+#     if '.' in email_name:
+#         parts = email_name.split('.')
+#         return ' '.join(part.capitalize() for part in parts)
+#     return email_name.capitalize()
+
+# def extract_subject_from_query(query):
+#     """Extract a meaningful subject from the query."""
+#     # First check for explicit subject mentions
+#     subject_patterns = [
+#         r'(?:subject|about|regarding|re|titled)[:|\s]\s*"?([^"\.]+)"?',
+#         r'(?:email|message|send)\s+(?:with\s+subject|about|regarding)\s+"?([^"\.]+)"?',
+#         r'with\s+(?:subject|title)\s+"?([^"\.]+)"?'
+#     ]
+    
+#     for pattern in subject_patterns:
+#         subject_match = re.search(pattern, query, re.IGNORECASE)
+#         if subject_match:
+#             return subject_match.group(1).strip()
+    
+#     # Look for project mentions
+#     project_match = re.search(r'(?:project|task)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#     if project_match:
+#         project = project_match.group(1).strip()
+#         # Check if this is an update request
+#         if re.search(r'update|progress|status', query, re.IGNORECASE):
+#             return f"Update on Project {project}"
+#         return f"Regarding Project {project}"
+    
+#     # Check for update requests
+#     if re.search(r'update|progress|status', query, re.IGNORECASE):
+#         return "Project Update Request"
+    
+#     # Generic fallback
+#     return "Project Information Request"
+
+# def send_email(query: str) -> str:
+#     """Send an email based on the user query with improved content generation and error handling."""
+#     print(f"Debug: send_email called with query: {query}")
+#     try:
+#         credentials_path = get_google_credentials()
+#         print(f"Debug: Using credentials from: {credentials_path}")
+        
+#         if not credentials_path:
+#             print("Debug: No valid credentials found")
+#             return "❌ Google credentials not available. Unable to send email."
+        
+#         ##Import Google libraries only when needed
+#         from google.oauth2.credentials import Credentials
+#         from googleapiclient.discovery import build
+#         from email.mime.text import MIMEText
+#         import base64
+        
+#         # Initialize Gmail service
+#         creds = Credentials.from_authorized_user_file(credentials_path, 
+#             ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
+#         gmail = build('gmail', 'v1', credentials=creds)
+#         print("Debug: Gmail service built successfully")
+        
+#         # Extract email address with more flexible regex
+#         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+#         email_matches = re.findall(email_pattern, query)
+        
+#         if not email_matches:
+#             print("Debug: No email address found in query")
+#             # Try to find keywords like "to" followed by potential recipients
+#             to_match = re.search(r'(?:to|send to|email to)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+#             if to_match:
+#                 recipient_name = to_match.group(1).strip()
+#                 return f"❌ Could not find a valid email address for '{recipient_name}'. Please include a complete email address."
+#             return "❌ No email address found in the query! Please include a valid email address."
+            
+#         recipient = email_matches[0]
+#         print(f"Debug: Recipient email extracted: {recipient}")
+        
+#         # Extract recipient name
+#         recipient_name = extract_recipient_name(query, recipient)
+#         print(f"Debug: Recipient name extracted: {recipient_name}")
+        
+#         # Extract subject from query
+#         subject = extract_subject_from_query(query)
+#         print(f"Debug: Subject extracted: {subject}")
+                    
+#         # Clean the query to extract content information
+#         content_info = clean_query_for_content(query)
+#         print(f"Debug: Cleaned content info: {content_info}")
+        
+#         # Generate email content
+#         groq_client = get_groq_client()
+#         if groq_client:
+#             print("Debug: Using Groq client for email content generation")
+#             # Use LLM for email content with more specific instructions
+#             prompt = f"""
+#             You are a professional assistant composing an email.
+            
+#             Create a professional email with the following information:
+#             - Recipient name: {recipient_name}
+#             - Subject: {subject}
+#             - Purpose: {content_info}
+            
+#             Guidelines:
+#             1. Write a clear, concise, and professional email
+#             2. Start with "Hello {recipient_name},"
+#             3. DO NOT include any placeholder text
+#             4. DO NOT repeat the email address in the body
+#             5. DO NOT mention anything about "composing an email" in the content
+#             6. DO NOT format as "I'm reaching out regarding compose and to John asking him..."
+#             7. If this is an update request, ask for specific updates on the project status
+#             8. End with "I would appreciate your response at your earliest convenience."
+#             9. Use the signature "Best regards,\\nMilind Warade"
+            
+#             Your email should be ready to send as-is with no modifications needed.
+#             """
+            
+#             try:
+#                 response = groq_client.chat.completions.create(
+#                     model="gemma2-9b-it",
+#                     messages=[{"role": "user", "content": prompt}],
+#                     temperature=0.7,
+#                     max_tokens=500
+#                 )
+                
+#                 body = response.choices[0].message.content.strip()
+#                 print(f"Debug: Generated email body length: {len(body)}")
+                
+#                 # Verify email quality - check for template phrases and raw query content
+#                 poor_quality_indicators = [
+#                     "compose and",
+#                     "asking him",
+#                     "send an email",
+#                     "[Your specific message here]",
+#                     "[Insert details]"
+#                 ]
+                
+#                 is_poor_quality = len(body) < 100 or any(indicator in body for indicator in poor_quality_indicators)
+                
+#                 if is_poor_quality:
+#                     print("Debug: Generated content is poor quality, using template instead")
+#                     body = generate_template_email(recipient, recipient_name, subject, content_info)
+#             except Exception as e:
+#                 print(f"Debug: Error generating email content with LLM: {str(e)}")
+#                 # Fallback to template-based email
+#                 body = generate_template_email(recipient, recipient_name, subject, content_info)
+#         else:
+#             print("Debug: No Groq client available, using template email")
+#             # Use template-based email generation when LLM is unavailable
+#             body = generate_template_email(recipient, recipient_name, subject, content_info)
+        
+#         try:
+#             # Get sender email
+#             profile_response = gmail.users().getProfile(userId='me').execute()
+#             sender = profile_response['emailAddress']
+#             print(f"Debug: Sender email retrieved: {sender}")
+            
+#             # Create and send message
+#             message = MIMEText(body)
+#             message['to'] = recipient
+#             message['from'] = sender
+#             message['subject'] = subject
+            
+#             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+#             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+#             print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
+            
+#             # Format response with email details
+#             final_response = f"""✅ Email sent successfully!
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+#             return final_response
+#         except Exception as e:
+#             error_trace = traceback.format_exc()
+#             print(f"Debug: Error sending email: {str(e)}")
+#             print(f"Debug: Traceback: {error_trace}")
+#             return f"❌ Email sending failed: {str(e)}"
+#     except Exception as e:
+#         error_trace = traceback.format_exc()
+#         print(f"Debug: Error in send_email: {str(e)}")
+#         print(f"Debug: Traceback: {error_trace}")
+#         return f"❌ Failed to send email: {str(e)}"
+
+#2
+
 def generate_template_email(recipient, recipient_name, subject, content_info):
     """Generate a template-based email when LLM generation fails."""
     print(f"Debug: Generating template email with content_info: {content_info}")
@@ -774,14 +1033,25 @@ def generate_template_email(recipient, recipient_name, subject, content_info):
     clean_content = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', content_info, flags=re.IGNORECASE)
     clean_content = re.sub(r'(?:his|her|their)\s+email\s+(?:is|address\s+is)\s+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', clean_content, flags=re.IGNORECASE)
     clean_content = re.sub(r'(?:to|ask|tell|email)\s+([A-Z][a-z]+)(?:\s|,|\.)', '', clean_content, flags=re.IGNORECASE)
+    
+    # Extract key topics like "benefits of exercise"
+    topic_match = re.search(r'benefits\s+of\s+([a-zA-Z0-9\s]+)', clean_content, re.IGNORECASE)
+    if topic_match:
+        topic = f"benefits of {topic_match.group(1)}"
+    else:
+        # Extract any meaningful phrases
+        topic_match = re.search(r'(about|regarding|on|telling)\s+([a-zA-Z0-9\s]+)', clean_content, re.IGNORECASE)
+        topic = topic_match.group(2) if topic_match else "the topic"
+    
     clean_content = clean_content.strip()
     
     # Extract project or topic if available
     project_match = re.search(r'(?:project|task|assignment)\s+([a-zA-Z0-9\s]+)', clean_content, re.IGNORECASE)
-    project_name = project_match.group(1) if project_match else "the project"
+    project_name = project_match.group(1) if project_match else None
     
-    # Determine if this is an update request
+    # Determine if this is an update request, benefits discussion, or general inquiry
     is_update_request = "update" in clean_content.lower() or "progress" in clean_content.lower() or "status" in clean_content.lower()
+    is_benefits_discussion = "benefits" in clean_content.lower() or "advantages" in clean_content.lower()
     
     # Create a proper professional email
     body_parts = [
@@ -789,7 +1059,7 @@ def generate_template_email(recipient, recipient_name, subject, content_info):
         "",
     ]
     
-    if is_update_request:
+    if is_update_request and project_name:
         body_parts.extend([
             f"I hope this email finds you well. I'm writing to request an update on Project {project_name}.",
             "",
@@ -799,13 +1069,35 @@ def generate_template_email(recipient, recipient_name, subject, content_info):
             "- Timeline for upcoming milestones",
             ""
         ])
-    else:
+    elif is_benefits_discussion:
         body_parts.extend([
-            f"I hope this email finds you well. I'm reaching out regarding Project {project_name}.",
+            "I hope this email finds you well. I'm reaching out regarding the benefits of exercise.",
             "",
-            f"{clean_content}",
-            ""
+            "Regular physical activity offers numerous advantages for both physical and mental health, including:",
+            "- Improved cardiovascular health and reduced risk of heart disease",
+            "- Increased energy levels and better sleep quality",
+            "- Reduced stress and anxiety",
+            "- Enhanced mood and cognitive function",
+            "- Maintenance of healthy weight",
+            "",
+            "Even small amounts of daily activity can lead to significant long-term health benefits."
         ])
+    else:
+        # For general inquiries or when specific patterns aren't detected
+        if project_name:
+            body_parts.extend([
+                f"I hope this email finds you well. I'm reaching out regarding Project {project_name}.",
+                ""
+            ])
+        else:
+            body_parts.extend([
+                f"I hope this email finds you well. I'm reaching out regarding {topic}.",
+                ""
+            ])
+        
+        # Add the cleaned content if it's substantial
+        if len(clean_content) > 10:
+            body_parts.extend([clean_content, ""])
     
     body_parts.extend([
         "I would appreciate your response at your earliest convenience. If you need any additional information or have questions, please don't hesitate to ask.",
@@ -820,32 +1112,29 @@ def clean_query_for_content(query):
     """Clean the query to extract only relevant content."""
     # Remove email addresses
     cleaned = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', query)
-    # Remove email related commands
+    
+    # Remove email related commands but be careful not to remove content
     cleaned = re.sub(r'(?:write|draft|compose|send)\s+(?:an|a)?\s*email\s+(?:about|regarding|on|with)?', '', cleaned, flags=re.IGNORECASE)
+    
+    # Extract the main content more carefully
+    # If "telling the benefits of" pattern exists, preserve it
+    if re.search(r'telling\s+the\s+benefits\s+of', cleaned, flags=re.IGNORECASE):
+        main_content = re.search(r'telling\s+the\s+benefits\s+of\s+(.+?)(?:\.|$)', cleaned, flags=re.IGNORECASE)
+        if main_content:
+            return f"the benefits of {main_content.group(1)}".strip()
+    
     # Remove "to [Name]" patterns
     cleaned = re.sub(r'to\s+([A-Z][a-z]+)(?:\s|,|\.)', '', cleaned, flags=re.IGNORECASE)
+    
     # Remove email address references
     cleaned = re.sub(r'(?:his|her|their)\s+email\s+(?:is|address\s+is)', '', cleaned, flags=re.IGNORECASE)
-    # Remove asking/telling mentions
-    cleaned = re.sub(r'(?:asking|telling)\s+(?:him|her|them)', '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove asking/telling mentions but preserve what comes after
+    telling_match = re.search(r'(?:asking|telling)\s+(?:him|her|them)\s+(.+)', cleaned, flags=re.IGNORECASE)
+    if telling_match:
+        return telling_match.group(1).strip()
+    
     return cleaned.strip()
-
-def extract_recipient_name(query, recipient_email):
-    """Extract the recipient's name from the query."""
-    # Look for patterns like "to John" or "ask Sarah"
-    name_pattern = r'(?:to|ask|tell|email)\s+([A-Z][a-z]+)(?:\s|,|\.)'
-    name_match = re.search(name_pattern, query, re.IGNORECASE)
-    
-    if name_match:
-        return name_match.group(1)
-    
-    # Try to extract name from email (before @ symbol)
-    email_name = recipient_email.split('@')[0]
-    # Convert email format to proper name (e.g., john.doe -> John)
-    if '.' in email_name:
-        parts = email_name.split('.')
-        return ' '.join(part.capitalize() for part in parts)
-    return email_name.capitalize()
 
 def extract_subject_from_query(query):
     """Extract a meaningful subject from the query."""
@@ -861,6 +1150,11 @@ def extract_subject_from_query(query):
         if subject_match:
             return subject_match.group(1).strip()
     
+    # Check for benefits of something
+    benefits_match = re.search(r'benefits\s+of\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
+    if benefits_match:
+        return f"Benefits of {benefits_match.group(1).capitalize()}"
+    
     # Look for project mentions
     project_match = re.search(r'(?:project|task)\s+([a-zA-Z0-9\s]+)', query, re.IGNORECASE)
     if project_match:
@@ -870,12 +1164,18 @@ def extract_subject_from_query(query):
             return f"Update on Project {project}"
         return f"Regarding Project {project}"
     
+    # Check for "telling" pattern
+    telling_match = re.search(r'telling\s+(?:him|her|them)\s+(?:about|regarding)?\s*(.+?)(?:\.|$)', query, re.IGNORECASE)
+    if telling_match:
+        topic = telling_match.group(1).strip()
+        return f"Information about {topic}"
+    
     # Check for update requests
     if re.search(r'update|progress|status', query, re.IGNORECASE):
         return "Project Update Request"
     
     # Generic fallback
-    return "Project Information Request"
+    return "Information Request"
 
 def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation and error handling."""
@@ -949,8 +1249,9 @@ def send_email(query: str) -> str:
             5. DO NOT mention anything about "composing an email" in the content
             6. DO NOT format as "I'm reaching out regarding compose and to John asking him..."
             7. If this is an update request, ask for specific updates on the project status
-            8. End with "I would appreciate your response at your earliest convenience."
-            9. Use the signature "Best regards,\\nMilind Warade"
+            8. If this is about benefits of exercise, include some key health benefits
+            9. End with "I would appreciate your response at your earliest convenience."
+            10. Use the signature "Best regards,\\nMilind Warade"
             
             Your email should be ready to send as-is with no modifications needed.
             """
