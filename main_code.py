@@ -878,7 +878,7 @@ def agent_manager(query: str) -> str:
 
 # Cache initialization functions
 @st.cache_resource
-def initialize_apis():
+def initialize_apis(show_spinner=False):
     """Initialize API clients with caching to avoid repeated initialization."""
     groq = get_groq_client()
     credentials = get_google_credentials()
