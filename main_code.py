@@ -925,6 +925,20 @@ def route_query(state: AgentState) -> AgentState:
             parsed_json = safe_json_parse(response_content, default={"agents": ["calendar_list"]})
             required_agents = parsed_json.get("agents", ["calendar_list"])
             
+            # Ensure required_agents is a list of strings, not a string representation of a list
+            if isinstance(required_agents, str):
+                # If somehow we got a string, try to parse it or use a default
+                try:
+                    if required_agents.startswith('[') and required_agents.endswith(']'):
+                        # Try to parse a string that looks like a JSON array
+                        import ast
+                        required_agents = ast.literal_eval(required_agents)
+                    else:
+                        # If it's just a single string value, make it a list
+                        required_agents = [required_agents]
+                except:
+                    required_agents = ["calendar_list"]  # Default fallback
+            
             state["actions"] = required_agents
             return state
         except Exception as e:
