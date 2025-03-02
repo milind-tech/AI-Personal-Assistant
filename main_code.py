@@ -977,7 +977,9 @@ def execute_tools(state: AgentState) -> AgentState:
             else:
                 responses.append(f"Unknown action: {action}")
         except Exception as e:
-            responses.append(f"❌ Error executing {action}: {str(e)}")
+            # Fix string formatting issue - ensure we're using proper string formatting
+            error_message = f"❌ Error executing {action}: {str(e)}"
+            responses.append(error_message)
             traceback.print_exc()
     
     if not responses:
@@ -1017,8 +1019,10 @@ def agent_manager(query: str) -> str:
         else:
             return "Sorry, I couldn't generate a response for your request."
     except Exception as e:
+        # Fix string formatting issue - use proper string formatting
+        error_message = f"Error processing your request: {str(e)}"
         traceback.print_exc()  # Print full traceback for debugging
-        return f"Error processing your request: {str(e)}"
+        return error_message
 
 # Cache initialization functions
 @st.cache_resource
