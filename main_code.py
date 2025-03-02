@@ -145,7 +145,7 @@ def create_calendar_event(query: str) -> str:
         model = "gemma2-9b-it"  # Could be configurable
         
         response = groq_client.chat.completions.create(
-            model=model,
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )
@@ -429,7 +429,7 @@ def list_calendar_events(query: str) -> str:
                 prompt = f"""From '{query}' extract number of events to show. Default is 10. Return just the number."""
                 
                 response = groq_client.chat.completions.create(
-                    model="gemma2-9b-it",
+                    model="llama-3.1-8b-instant",
                     messages=[{"role": "user", "content": prompt}]
                 )
                 
@@ -785,7 +785,7 @@ def route_query(state: AgentState) -> AgentState:
         
         try:
             response = groq_client.chat.completions.create(
-                model="gemma2-9b-it",
+                model="llama-3.1-8b-instant",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
             )
