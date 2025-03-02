@@ -667,8 +667,80 @@ def generate_email_content(recipient_name, subject, query):
     
     return "\n".join(body)
 
+# def send_email(query: str) -> str:
+#     """Send an email based on the user query with improved content generation."""
+#     print(f"Debug: send_email called with query: {query}")
+#     try:
+#         # Get credentials directly
+#         credentials = get_google_credentials()
+#         print(f"Debug: Using credentials: {credentials}")
+        
+#         if not credentials:
+#             print("Debug: No valid credentials found")
+#             return "❌ Google credentials not available. Unable to send email."
+            
+#         # Extract email address
+#         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+#         email_matches = re.findall(email_pattern, query)
+        
+#         if not email_matches:
+#             return "❌ No email address found in the query! Please include a valid email address."
+            
+#         recipient = email_matches[0]
+#         print(f"Debug: Recipient email extracted: {recipient}")
+        
+#         # Initialize Gmail service directly with credentials
+#         from googleapiclient.discovery import build
+#         from email.mime.text import MIMEText
+#         import base64
+        
+#         gmail = build('gmail', 'v1', credentials=credentials)
+        
+#         # Extract recipient name and generate subject/content
+#         recipient_name = extract_recipient_name(recipient)
+#         subject = generate_subject(query)
+#         body = generate_email_content(recipient_name, subject, query)
+        
+#         try:
+#             # Get sender email
+#             profile_response = gmail.users().getProfile(userId='me').execute()
+#             sender = profile_response['emailAddress']
+#             print(f"Debug: Sender email retrieved: {sender}")
+            
+#             # Create and send message
+#             message = MIMEText(body)
+#             message['to'] = recipient
+#             message['from'] = sender
+#             message['subject'] = subject
+            
+#             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+#             send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+#             print(f"Debug: Email sent successfully, message ID: {send_result.get('id', 'unknown')}")
+            
+#             return f"""✅ Email sent successfully!
+# To: {recipient}
+# Subject: {subject}
+# Message:
+# {body}"""
+            
+#         except Exception as e:
+#             error_trace = traceback.format_exc()
+#             print(f"Debug: Error sending email: {str(e)}")
+#             print(f"Debug: Traceback: {error_trace}")
+#             return f"❌ Email sending failed: {str(e)}"
+            
+#     except Exception as e:
+#         error_trace = traceback.format_exc()
+#         print(f"Debug: Error in send_email: {str(e)}")
+#         print(f"Debug: Traceback: {error_trace}")
+#         return f"❌ Failed to process email request: {str(e)}"
+
+
+#1
+
+# Updated email tool that uses LLM for content generation
 def send_email(query: str) -> str:
-    """Send an email based on the user query with improved content generation."""
+    """Send an email based on the user query with LLM-generated content."""
     print(f"Debug: send_email called with query: {query}")
     try:
         # Get credentials directly
@@ -696,16 +768,53 @@ def send_email(query: str) -> str:
         
         gmail = build('gmail', 'v1', credentials=credentials)
         
-        # Extract recipient name and generate subject/content
-        recipient_name = extract_recipient_name(recipient)
-        subject = generate_subject(query)
-        body = generate_email_content(recipient_name, subject, query)
+        # Get sender email
+        profile_response = gmail.users().getProfile(userId='me').execute()
+        sender = profile_response['emailAddress']
+        print(f"Debug: Sender email retrieved: {sender}")
         
+        # Extract recipient name from email
+        recipient_name = recipient.split('@')[0].replace('.', ' ').title()
+        
+        # Use LLM to generate email content
+        groq_client = get_groq_client()
+        if not groq_client:
+            return "❌ LLM service not available. Unable to generate email content."
+        
+        # Create prompt for the LLM
+        prompt = f"""Generate a professional email based on this request: "{query}"
+
+        The email should be sent from {sender} to {recipient} ({recipient_name}).
+        
+        Important details:
+        1. Create an appropriate subject line based on the request
+        2. Use a professional tone and structure
+        3. Include a proper greeting and closing
+        4. Be concise but comprehensive
+        5. Format the email with proper spacing
+        6. Sign the email as "Milind Warade"
+        
+        Return the result in this JSON format:
+        {{
+            "subject": "The email subject line",
+            "body": "The complete email body with proper formatting"
+        }}
+        
+        Do not include any explanations, just the JSON.
+        """
+        
+        # Call the LLM to generate email content
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        
+        # Parse the response
         try:
-            # Get sender email
-            profile_response = gmail.users().getProfile(userId='me').execute()
-            sender = profile_response['emailAddress']
-            print(f"Debug: Sender email retrieved: {sender}")
+            email_content = json.loads(response.choices[0].message.content)
+            subject = email_content.get("subject", "No subject")
+            body = email_content.get("body", "Email content could not be generated.")
             
             # Create and send message
             message = MIMEText(body)
@@ -723,11 +832,31 @@ Subject: {subject}
 Message:
 {body}"""
             
-        except Exception as e:
-            error_trace = traceback.format_exc()
-            print(f"Debug: Error sending email: {str(e)}")
-            print(f"Debug: Traceback: {error_trace}")
-            return f"❌ Email sending failed: {str(e)}"
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails
+            content = response.choices[0].message.content
+            
+            # Try to extract subject and body manually
+            subject_match = re.search(r'"subject":\s*"([^"]+)"', content)
+            body_match = re.search(r'"body":\s*"([^"]+)"', content)
+            
+            subject = subject_match.group(1) if subject_match else "Email from AI Assistant"
+            body = body_match.group(1) if body_match else content
+            
+            # Create and send message
+            message = MIMEText(body)
+            message['to'] = recipient
+            message['from'] = sender
+            message['subject'] = subject
+            
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+            send_result = gmail.users().messages().send(userId='me', body={'raw': raw}).execute()
+            
+            return f"""✅ Email sent successfully! (with fallback parsing)
+To: {recipient}
+Subject: {subject}
+Message:
+{body}"""
             
     except Exception as e:
         error_trace = traceback.format_exc()
