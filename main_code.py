@@ -114,9 +114,7 @@ def create_calendar_event(query: str) -> str:
         # Import Google libraries only when needed
         from googleapiclient.discovery import build
         
-        calendar = build('calendar', 'v3', 
-            credentials=credentials,  # Use credentials object directly
-            scopes=['https://www.googleapis.com/auth/calendar.events'])
+        calendar = build('calendar', 'v3', credentials=credentials)
         
         timezone = 'Asia/Kolkata'
         now = datetime.now(pytz.timezone(timezone))
@@ -279,9 +277,7 @@ def simple_event_parser(query, timezone):
         if not credentials:
             return "❌ Google credentials not available. Unable to create calendar event."
             
-        calendar = build('calendar', 'v3', 
-            credentials=credentials,  # Use credentials object directly
-            scopes=['https://www.googleapis.com/auth/calendar.events'])
+        calendar = build('calendar', 'v3', credentials=credentials)
         
         # Extract event title (anything before temporal words)
         title_match = re.match(r'^(.*?)(?:on|tomorrow|next|this|at|from)', query, re.IGNORECASE)
@@ -411,9 +407,7 @@ def list_calendar_events(query: str) -> str:
         # Import Google libraries only when needed
         from googleapiclient.discovery import build
         
-        calendar = build('calendar', 'v3', 
-            credentials=credentials,  # Use credentials object directly
-            scopes=['https://www.googleapis.com/auth/calendar.readonly'])
+        calendar = build('calendar', 'v3', credentials=credentials)
         
         # Extract number of events directly from query with regex
         num_events = 10  # Default
@@ -695,16 +689,12 @@ def send_email(query: str) -> str:
         recipient = email_matches[0]
         print(f"Debug: Recipient email extracted: {recipient}")
         
-        # Import Google libraries only when needed
+        # Initialize Gmail service directly with credentials
         from googleapiclient.discovery import build
         from email.mime.text import MIMEText
         import base64
         
-        # Initialize Gmail service directly with credentials
-        gmail = build('gmail', 'v1', 
-            credentials=credentials,  # Use credentials object directly
-            scopes=['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
-        print("Debug: Gmail service built successfully")
+        gmail = build('gmail', 'v1', credentials=credentials)
         
         # Extract recipient name and generate subject/content
         recipient_name = extract_recipient_name(recipient)
