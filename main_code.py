@@ -107,17 +107,16 @@ def safe_json_parse(text, default=None):
 def create_calendar_event(query: str) -> str:
     """Create a calendar event based on the user query."""
     try:
-        credentials_path = get_google_credentials()
-        if not credentials_path:
+        credentials = get_google_credentials()
+        if not credentials:
             return "❌ Google credentials not available. Unable to create calendar event."
         
         # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         
         calendar = build('calendar', 'v3', 
-            credentials=Credentials.from_authorized_user_file(credentials_path, 
-                ['https://www.googleapis.com/auth/calendar.events']))
+            credentials=credentials,  # Use credentials object directly
+            scopes=['https://www.googleapis.com/auth/calendar.events'])
         
         timezone = 'Asia/Kolkata'
         now = datetime.now(pytz.timezone(timezone))
@@ -274,16 +273,15 @@ def simple_event_parser(query, timezone):
     """Simple regex-based event parser as fallback when LLM is unavailable"""
     try:
         # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         
-        credentials_path = get_google_credentials()
-        if not credentials_path:
+        credentials = get_google_credentials()
+        if not credentials:
             return "❌ Google credentials not available. Unable to create calendar event."
             
         calendar = build('calendar', 'v3', 
-            credentials=Credentials.from_authorized_user_file(credentials_path, 
-                ['https://www.googleapis.com/auth/calendar.events']))
+            credentials=credentials,  # Use credentials object directly
+            scopes=['https://www.googleapis.com/auth/calendar.events'])
         
         # Extract event title (anything before temporal words)
         title_match = re.match(r'^(.*?)(?:on|tomorrow|next|this|at|from)', query, re.IGNORECASE)
@@ -406,17 +404,16 @@ def simple_event_parser(query, timezone):
 def list_calendar_events(query: str) -> str:
     """List upcoming calendar events."""
     try:
-        credentials_path = get_google_credentials()
-        if not credentials_path:
+        credentials = get_google_credentials()
+        if not credentials:
             return "❌ Google credentials not available. Unable to list calendar events."
         
         # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         
         calendar = build('calendar', 'v3', 
-            credentials=Credentials.from_authorized_user_file(credentials_path, 
-                ['https://www.googleapis.com/auth/calendar.readonly']))
+            credentials=credentials,  # Use credentials object directly
+            scopes=['https://www.googleapis.com/auth/calendar.readonly'])
         
         # Extract number of events directly from query with regex
         num_events = 10  # Default
@@ -680,11 +677,11 @@ def send_email(query: str) -> str:
     """Send an email based on the user query with improved content generation."""
     print(f"Debug: send_email called with query: {query}")
     try:
-        # Get credentials path directly
-        credentials_path = get_google_credentials()
-        print(f"Debug: Using credentials from: {credentials_path}")
+        # Get credentials directly
+        credentials = get_google_credentials()
+        print(f"Debug: Using credentials: {credentials}")
         
-        if not credentials_path:
+        if not credentials:
             print("Debug: No valid credentials found")
             return "❌ Google credentials not available. Unable to send email."
             
@@ -699,15 +696,14 @@ def send_email(query: str) -> str:
         print(f"Debug: Recipient email extracted: {recipient}")
         
         # Import Google libraries only when needed
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         from email.mime.text import MIMEText
         import base64
         
         # Initialize Gmail service directly with credentials
-        creds = Credentials.from_authorized_user_file(credentials_path, 
-            ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
-        gmail = build('gmail', 'v1', credentials=creds)
+        gmail = build('gmail', 'v1', 
+            credentials=credentials,  # Use credentials object directly
+            scopes=['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleapis.com/auth/gmail.send'])
         print("Debug: Gmail service built successfully")
         
         # Extract recipient name and generate subject/content
