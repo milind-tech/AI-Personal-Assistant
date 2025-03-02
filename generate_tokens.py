@@ -6,26 +6,22 @@ from google.auth.transport.requests import Request
 
 # Define the scopes for Google Calendar and Gmail APIs
 SCOPES = [
-    'https://www.googleapis.com/auth/calendar.events',  # For creating and reading events
-    'https://www.googleapis.com/auth/calendar.readonly',  # For reading calendar events
-    'https://www.googleapis.com/auth/gmail.compose',  # For drafting emails
-    'https://www.googleapis.com/auth/gmail.send'  # For sending emails
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/gmail.compose',
+    'https://www.googleapis.com/auth/gmail.send'
 ]
 
 def get_authenticated_service():
     """
     Authenticate and get credentials for Google Calendar and Gmail APIs.
-
-    Returns:
-    - Authenticated credentials
-    - None if authentication fails
     """
     creds = None
     
     # Token file path
     token_path = 'token.json'
     
-    # Client secret file path - updated to match your renamed file
+    # Client secret file path
     client_secret_path = 'client_secrets.json'
     
     # Check if token file exists
@@ -47,15 +43,17 @@ def get_authenticated_service():
                 # Allow OAuth for local testing
                 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
                 
+                # Create flow using the console flow (no redirect needed)
                 flow = InstalledAppFlow.from_client_secrets_file(
                     client_secret_path, SCOPES)
-                creds = flow.run_local_server(port=0)
+                
+                # IMPORTANT: Force the redirect URI to use port 8080
+                flow.redirect_uri = 'http://localhost:8080/'
+                
+                # Use port 8080 which is in your authorized redirect URIs
+                creds = flow.run_local_server(port=8080)
                 
                 # Save the credentials for the next run
-                with open(token_path, 'w') as token:
-                    token.write(creds.to_json())
-                    
-                # Also save in the format your application expects
                 token_info = {
                     'token': creds.token,
                     'refresh_token': creds.refresh_token,
@@ -66,7 +64,7 @@ def get_authenticated_service():
                     'universe_domain': 'googleapis.com'
                 }
                 
-                # Save to token.json in a more readable format
+                # Save to token.json
                 with open(token_path, 'w') as f:
                     json.dump(token_info, f, indent=4)
                     
